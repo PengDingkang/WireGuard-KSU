@@ -322,6 +322,11 @@ window.cancelEdit = function() {
 
 window.saveConfig = async function() {
   const content = document.getElementById('configEdit').value;
+  // basic validation
+  if (!/\[Interface\]/i.test(content)) { toast('Missing [Interface] section', true); return; }
+  if (!/PrivateKey\s*=/i.test(content)) { toast('Missing PrivateKey', true); return; }
+  if (!/\[Peer\]/i.test(content)) { toast('Missing [Peer] section', true); return; }
+  if (/REPLACE_WITH_/.test(content)) { toast('Replace placeholder values before saving', true); return; }
   const r = await run(`cat > ${WG_DATA}/${currentIface}.conf << 'WGCONF'\n${content}\nWGCONF`);
   if (r.errno === 0) {
     toast('Config saved');

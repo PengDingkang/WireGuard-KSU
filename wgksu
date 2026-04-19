@@ -39,6 +39,24 @@ wg_up() {
     return 1
   fi
 
+  # basic config validation
+  if ! grep -qi '^\[Interface\]' "$conf"; then
+    echo "ERROR: missing [Interface] section in $conf"
+    return 1
+  fi
+  if ! grep -qi '^PrivateKey' "$conf"; then
+    echo "ERROR: missing PrivateKey in $conf"
+    return 1
+  fi
+  if grep -q 'REPLACE_WITH_' "$conf"; then
+    echo "ERROR: $conf still has placeholder values, edit before starting"
+    return 1
+  fi
+  if ! grep -qi '^\[Peer\]' "$conf"; then
+    echo "ERROR: missing [Peer] section in $conf"
+    return 1
+  fi
+
   # extract Interface fields
   address=$(grep -i '^Address' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
   dns=$(grep -i '^DNS' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
