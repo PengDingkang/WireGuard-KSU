@@ -75,6 +75,7 @@ h2 { font-size: 18px; margin-bottom: 12px; }
   <div class="row">
     <h2>Config</h2>
     <button class="btn btn-save" style="flex:none;padding:6px 16px" onclick="toggleEdit()" id="editBtn">Edit</button>
+    <button class="btn btn-clear" style="flex:none;padding:6px 16px;margin-left:4px" onclick="deleteConfig()" id="deleteBtn">Delete</button>
   </div>
   <div class="row wrap">
     <label class="toggle">
@@ -204,10 +205,10 @@ async function refresh() {
 
   if (!currentIface || !ifaces.includes(currentIface)) currentIface = ifaces[0];
 
-  // tabs
+  // tabs with + button
   document.getElementById('ifaceTabs').innerHTML = ifaces.map(i =>
     `<span class="iface-tab ${i===currentIface?'active':''}" onclick="switchIface('${i}')">${i}</span>`
-  ).join('');
+  ).join('') + '<span class="iface-tab" onclick="addNewIface()" title="New interface">＋</span>';
 
   // check if current interface is up
   const linkCheck = await run(`ip link show ${currentIface} 2>/dev/null`);
@@ -385,7 +386,8 @@ window.genKey = async function() {
   }
 };
 
-window.createNewConfig = async function() {
+window.createNewConfig = async function(ifaceName) {
+  const name = ifaceName || 'wg0';
   const r = await run('privkey=$(wg genkey) && echo "$privkey" && echo "$privkey" | wg pubkey');
   const lines = r.stdout.trim().split('\n');
   if (lines.length !== 2) { toast('Failed to generate keypair', true); return; }
@@ -399,9 +401,34 @@ window.createNewConfig = async function() {
   document.getElementById('keyPriv').textContent = lines[0];
   document.getElementById('keyPub').textContent = lines[1];
   document.getElementById('keyResult').style.display = 'block';
-  currentIface = 'wg0';
+  currentIface = name;
   window._editing = true;
-  toast('New config created with fresh keypair — copy the public key to your server');
+  toast(`New config "${name}" — copy the public key to your server`);
+};
+
+window.addNewIface = async function() {
+  const ifaces = await getInterfaces();
+  // find next available wgN name
+  let n = 0;
+  while (ifaces.includes('wg' + n)) n++;
+  const name = prompt('Interface name:', 'wg' + n);
+  if (!name) return;
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) { toast('Invalid interface name', true); return; }
+  await createNewConfig(name);
+};
+
+window.deleteConfig = async function() {
+  if (!currentIface) return;
+  if (!confirm(`Delete ${currentIface}.conf? This will also stop the interface.`)) return;
+  await run(`wgksu stop ${currentIface}`);
+  const r = await run(`rm -f ${WG_DATA}/${currentIface}.conf`);
+  if (r.errno === 0) {
+    toast(`${currentIface} deleted`);
+    currentIface = '';
+    await refresh();
+  } else {
+    toast('Delete failed: ' + r.stderr, true);
+  }
 };
 
 refresh();

@@ -12,14 +12,18 @@
 
 ## 功能
 
-- 命令行管理（start/stop/restart/status/enable/disable）
+- 命令行管理（start/stop/restart/status/enable/disable/genkey）
 - KernelSU/APatch WebUI 管理界面
-  - 多接口标签切换
+  - 多接口标签切换，支持新建和删除接口
+  - 新建接口时自动生成密钥对
   - 接口状态（IP、端口、公钥）
   - Peer 列表（endpoint、最后握手、收发流量、Allowed IPs）
   - 配置文件在线编辑，保存并重启
+  - 密钥对生成工具
   - 开机自启动开关
   - 错误日志查看
+- 首次安装自动生成密钥对和配置模板
+- 兼容标准 wg-quick 配置格式
 - 开机自动启动所有配置的接口
 - KSU 模块列表显示运行状态和 IP
 
@@ -33,8 +37,11 @@
 
 1. 从 [Releases](../../releases) 下载 zip
 2. 在 Magisk/KSU/APatch Manager 中刷入
-3. 编辑配置文件 `/data/adb/wireguard/wg0.conf`
-4. 运行 `wgksu start` 或重启设备
+3. 首次安装会自动生成密钥对和 `wg0.conf` 模板，安装日志中会显示公钥
+4. 编辑 `/data/adb/wireguard/wg0.conf`，填入服务器信息（或在 WebUI 中编辑）
+5. 运行 `wgksu start` 或重启设备
+
+也可以在 WebUI 中点击 "＋" 新建接口，会自动生成密钥对并进入编辑模式。
 
 ## 管理
 
@@ -47,6 +54,7 @@ wgksu stop wg0            # 停止指定接口
 wgksu status              # 查看所有接口状态
 wgksu enable              # 开启开机自启
 wgksu disable             # 关闭开机自启
+wgksu genkey              # 生成新的密钥对
 ```
 
 KernelSU/APatch 用户可在 Manager 中打开模块 WebUI 进行管理。
