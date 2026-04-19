@@ -116,6 +116,8 @@ import { exec } from 'https://esm.sh/kernelsu';
 
 const WG_DATA = '/data/adb/wireguard';
 let currentIface = '';
+let wgCmd = 'wg';
+let wgksuCmd = 'wgksu';
 
 async function run(cmd) {
   try {
@@ -123,6 +125,14 @@ async function run(cmd) {
     return { errno, stdout: stdout || '', stderr: stderr || '' };
   } catch(e) {
     return { errno: -1, stdout: '', stderr: e.message };
+  }
+}
+
+async function initCmd() {
+  const r = await run('which wgksu 2>/dev/null || command -v wgksu 2>/dev/null');
+  if (!r.stdout.trim()) {
+    wgCmd = WG_DATA + '/wg';
+    wgksuCmd = WG_DATA + '/wgksu';
   }
 }
 
@@ -215,7 +225,7 @@ async function refresh() {
   const isUp = linkCheck.errno === 0 && linkCheck.stdout.includes('UP');
 
   // overall status
-  const anyUp = await run('wg show interfaces 2>/dev/null');
+  const anyUp = await run(`${wgCmd} show interfaces 2>/dev/null`);
   const runningIfaces = anyUp.stdout.trim();
   if (runningIfaces) {
     document.getElementById('statusBadge').innerHTML = `<span class="status-dot on"></span>Running (${runningIfaces.replace(/\n/g,', ')})`;
@@ -225,7 +235,7 @@ async function refresh() {
 
   // interface info
   if (isUp) {
-    const wgOut = await run(`wg show ${currentIface} 2>/dev/null`);
+    const wgOut = await run(`${wgCmd} show ${currentIface} 2>/dev/null`);
     const parsed = parseWgShow(wgOut.stdout);
     const ipOut = await run(`ip -4 addr show ${currentIface} 2>/dev/null`);
     const ipMatch = ipOut.stdout.match(/inet ([^\s]+)/);
@@ -292,7 +302,7 @@ window.switchIface = function(name) {
 window.control = async function(action) {
   const btn = event.target;
   btn.disabled = true; btn.textContent = '...';
-  await run(`wgksu ${action}`);
+  await run(`${wgksuCmd} ${action}`);
   await new Promise(r => setTimeout(r, 1000));
   await refresh();
   btn.disabled = false;
@@ -340,7 +350,7 @@ window.saveConfig = async function() {
 
 window.saveAndRestart = async function() {
   await saveConfig();
-  await run('wgksu restart');
+  await run(`${wgksuCmd} restart`);
   await new Promise(r => setTimeout(r, 1000));
   await refresh();
   toast('Config saved & restarted');
@@ -374,7 +384,7 @@ window.clearLog = async function() {
 };
 
 window.genKey = async function() {
-  const r = await run('privkey=$(wg genkey) && echo "$privkey" && echo "$privkey" | wg pubkey');
+  const r = await run(`privkey=$(${wgCmd} genkey) && echo "$privkey" && echo "$privkey" | ${wgCmd} pubkey`);
   const lines = r.stdout.trim().split('\n');
   if (lines.length === 2) {
     document.getElementById('keyPriv').textContent = lines[0];
@@ -388,7 +398,7 @@ window.genKey = async function() {
 
 window.createNewConfig = async function(ifaceName) {
   const name = ifaceName || 'wg0';
-  const r = await run('privkey=$(wg genkey) && echo "$privkey" && echo "$privkey" | wg pubkey');
+  const r = await run(`privkey=$(${wgCmd} genkey) && echo "$privkey" && echo "$privkey" | ${wgCmd} pubkey`);
   const lines = r.stdout.trim().split('\n');
   if (lines.length !== 2) { toast('Failed to generate keypair', true); return; }
   const conf = `[Interface]\nPrivateKey = ${lines[0]}\nAddress = 10.0.0.2/24\n# DNS = 1.1.1.1\n# MTU = 1420\n\n[Peer]\nPublicKey = REPLACE_WITH_SERVER_PUBLIC_KEY\nEndpoint = REPLACE_WITH_SERVER_IP:51820\nAllowedIPs = 10.0.0.0/24\nPersistentKeepalive = 25`;
@@ -420,7 +430,7 @@ window.addNewIface = async function() {
 window.deleteConfig = async function() {
   if (!currentIface) return;
   if (!confirm(`Delete ${currentIface}.conf? This will also stop the interface.`)) return;
-  await run(`wgksu stop ${currentIface}`);
+  await run(`${wgksuCmd} stop ${currentIface}`);
   const r = await run(`rm -f ${WG_DATA}/${currentIface}.conf`);
   if (r.errno === 0) {
     toast(`${currentIface} deleted`);
@@ -431,8 +441,10 @@ window.deleteConfig = async function() {
   }
 };
 
-refresh();
-setInterval(refresh, 10000);
+initCmd().then(() => {
+  refresh();
+  setInterval(refresh, 10000);
+});
 </script>
 </body>
 </html>
