@@ -43,11 +43,9 @@ wg_up() {
   address=$(grep -i '^Address' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
   dns=$(grep -i '^DNS' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
   mtu=$(grep -i '^MTU' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
-  table=$(grep -i '^Table' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
 
   # create interface
-  ip link add "$iface" type wireguard 2>"$log_file"
-  if [ $? -ne 0 ]; then
+  if ! ip link add "$iface" type wireguard 2>"$log_file"; then
     echo "ERROR: failed to create WireGuard interface (kernel support missing?)"
     cat "$log_file" 2>/dev/null
     return 1
@@ -76,7 +74,6 @@ wg_up() {
 
   # add routes for AllowedIPs
   wg show "$iface" allowed-ips 2>/dev/null | while read -r _ ips; do
-    IFS=$'\t '
     for cidr in $ips; do
       [ "$cidr" = "(none)" ] && continue
       case "$cidr" in
@@ -84,7 +81,6 @@ wg_up() {
         *)   ip -4 route add "$cidr" dev "$iface" 2>/dev/null ;;
       esac
     done
-    unset IFS
   done
 
   # DNS (set system property for Android)
@@ -123,8 +119,8 @@ wg_down() {
 
 # --- list available configs ---
 list_configs() {
-  ls "$wg_data"/*.conf 2>/dev/null | while read -r f; do
-    basename "$f" .conf
+  for f in "$wg_data"/*.conf; do
+    [ -f "$f" ] && basename "$f" .conf
   done
 }
 
