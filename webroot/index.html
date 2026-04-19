@@ -84,6 +84,13 @@ h2 { font-size: 18px; margin-bottom: 12px; }
     <span id="autoStartStatus" style="font-size:13px;color:var(--dim)">Loading...</span>
   </div>
   <div class="toggle-hint">Controls whether WireGuard starts automatically after boot.</div>
+  <div style="margin-top:12px">
+    <button class="btn btn-clear" style="flex:none;padding:8px 16px;font-size:13px" onclick="genKey()">🔑 Generate Keypair</button>
+    <div id="keyResult" style="display:none;margin-top:8px;background:#0d1117;border-radius:8px;padding:10px;font-size:12px;font-family:monospace">
+      <div style="margin-bottom:6px"><span style="color:var(--dim)">Private Key:</span> <span id="keyPriv" style="user-select:all"></span></div>
+      <div><span style="color:var(--dim)">Public Key:</span> <span id="keyPub" style="user-select:all"></span></div>
+    </div>
+  </div>
   <div id="configView" class="log">Loading...</div>
   <textarea id="configEdit" class="editor" style="display:none"></textarea>
   <div id="configBtns" class="btn-group" style="display:none">
@@ -352,6 +359,19 @@ window.clearLog = async function() {
     toast('Error log cleared');
   } else {
     toast('Clear failed: ' + r.stderr, true);
+  }
+};
+
+window.genKey = async function() {
+  const r = await run('privkey=$(wg genkey) && echo "$privkey" && echo "$privkey" | wg pubkey');
+  const lines = r.stdout.trim().split('\n');
+  if (lines.length === 2) {
+    document.getElementById('keyPriv').textContent = lines[0];
+    document.getElementById('keyPub').textContent = lines[1];
+    document.getElementById('keyResult').style.display = 'block';
+    toast('Keypair generated');
+  } else {
+    toast('Failed to generate keypair', true);
   }
 };
 

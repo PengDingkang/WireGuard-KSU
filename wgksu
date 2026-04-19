@@ -237,5 +237,11 @@ case "$1" in
   status)  show_status ;;
   enable)  set_autostart 1; echo "boot auto start: enabled" ;;
   disable) set_autostart 0; echo "boot auto start: disabled" ;;
-  *)       echo "Usage: wgksu {start|stop|restart|status|enable|disable} [interface]" ;;
+  genkey)
+    privkey=$(wg genkey)
+    pubkey=$(echo "$privkey" | wg pubkey)
+    echo "Private Key: $privkey"
+    echo "Public Key:  $pubkey"
+    ;;
+  *)       echo "Usage: wgksu {start|stop|restart|status|enable|disable|genkey} [interface]" ;;
 esac
