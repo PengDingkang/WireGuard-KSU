@@ -8,9 +8,9 @@
   sleep 5
 
   auto_start=1
-  if [ -f /data/adb/wireguard/autostart.conf ]; then
+  if [ -f /data/adb/wireguard/autostart ]; then
     # shellcheck disable=SC1091
-    . /data/adb/wireguard/autostart.conf
+    . /data/adb/wireguard/autostart
     auto_start=${AUTO_START:-1}
   fi
   [ "$auto_start" = "1" ] || exit 0

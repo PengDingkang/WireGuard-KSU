@@ -193,9 +193,14 @@ async function refresh() {
     document.getElementById('ifaceTabs').innerHTML = '';
     document.getElementById('ifaceInfo').innerHTML = '';
     document.getElementById('peers').innerHTML = '<div style="color:var(--dim);padding:8px">No .conf files in /data/adb/wireguard/</div>';
-    document.getElementById('configView').textContent = 'No config files found';
+    document.getElementById('configView').textContent = 'No config files found. Click "New Config" to create one with a fresh keypair.';
+    document.getElementById('editBtn').textContent = 'New Config';
+    document.getElementById('editBtn').disabled = false;
+    document.getElementById('editBtn').onclick = createNewConfig;
     return;
   }
+  document.getElementById('editBtn').textContent = 'Edit';
+  document.getElementById('editBtn').onclick = toggleEdit;
 
   if (!currentIface || !ifaces.includes(currentIface)) currentIface = ifaces[0];
 
@@ -267,7 +272,7 @@ async function refresh() {
   }
 
   // autostart
-  const as = await run(`sh -c 'AUTO_START=1; [ -f ${WG_DATA}/autostart.conf ] && . ${WG_DATA}/autostart.conf; echo \${AUTO_START:-1}'`);
+  const as = await run(`sh -c 'AUTO_START=1; [ -f ${WG_DATA}/autostart ] && . ${WG_DATA}/autostart; echo \${AUTO_START:-1}'`);
   const enabled = as.stdout.trim() !== '0';
   document.getElementById('autoStartToggle').checked = enabled;
   document.getElementById('autoStartStatus').textContent = enabled ? 'Enabled' : 'Disabled';
@@ -339,7 +344,7 @@ window.saveAutoStart = async function(enabled) {
   const toggle = document.getElementById('autoStartToggle');
   const status = document.getElementById('autoStartStatus');
   toggle.disabled = true; status.textContent = 'Saving...';
-  const r = await run(`cat > ${WG_DATA}/autostart.conf << 'WGAUTO'\nAUTO_START=${enabled?'1':'0'}\nWGAUTO`);
+  const r = await run(`cat > ${WG_DATA}/autostart << 'WGAUTO'\nAUTO_START=${enabled?'1':'0'}\nWGAUTO`);
   toggle.disabled = false;
   if (r.errno === 0) {
     toggle.checked = enabled;
@@ -373,6 +378,25 @@ window.genKey = async function() {
   } else {
     toast('Failed to generate keypair', true);
   }
+};
+
+window.createNewConfig = async function() {
+  const r = await run('privkey=$(wg genkey) && echo "$privkey" && echo "$privkey" | wg pubkey');
+  const lines = r.stdout.trim().split('\n');
+  if (lines.length !== 2) { toast('Failed to generate keypair', true); return; }
+  const conf = `[Interface]\nPrivateKey = ${lines[0]}\nAddress = 10.0.0.2/24\n# DNS = 1.1.1.1\n# MTU = 1420\n\n[Peer]\nPublicKey = REPLACE_WITH_SERVER_PUBLIC_KEY\nEndpoint = REPLACE_WITH_SERVER_IP:51820\nAllowedIPs = 10.0.0.0/24\nPersistentKeepalive = 25`;
+  document.getElementById('configView').style.display = 'none';
+  document.getElementById('configEdit').style.display = 'block';
+  document.getElementById('configEdit').value = conf;
+  document.getElementById('configBtns').style.display = 'flex';
+  document.getElementById('editBtn').textContent = 'Editing...';
+  document.getElementById('editBtn').disabled = true;
+  document.getElementById('keyPriv').textContent = lines[0];
+  document.getElementById('keyPub').textContent = lines[1];
+  document.getElementById('keyResult').style.display = 'block';
+  currentIface = 'wg0';
+  window._editing = true;
+  toast('New config created with fresh keypair — copy the public key to your server');
 };
 
 refresh();

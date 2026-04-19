@@ -50,19 +50,35 @@ if [ ! -d "$wg_data" ]; then
   set_perm "$wg_data" 0 0 0700
 fi
 
-# install example config if no configs exist
-if ! ls "$wg_data"/*.conf >/dev/null 2>&1; then
-  cp -f "$MODPATH/wg0.conf.example" "$wg_data/"
-  ui_print "- Example config installed to $wg_data/wg0.conf.example"
-  ui_print "- ⚠ Rename to wg0.conf and edit before starting"
+# generate initial config with keypair if no configs exist
+if ! ls "$wg_data"/wg*.conf >/dev/null 2>&1; then
+  privkey=$("$MODPATH/wg" genkey)
+  pubkey=$(echo "$privkey" | "$MODPATH/wg" pubkey)
+  cat > "$wg_data/wg0.conf" <<EOF
+[Interface]
+PrivateKey = ${privkey}
+Address = 10.0.0.2/24
+# DNS = 1.1.1.1
+# MTU = 1420
+
+[Peer]
+PublicKey = REPLACE_WITH_SERVER_PUBLIC_KEY
+Endpoint = REPLACE_WITH_SERVER_IP:51820
+AllowedIPs = 10.0.0.0/24
+PersistentKeepalive = 25
+EOF
+  chmod 600 "$wg_data/wg0.conf"
+  ui_print "- Generated wg0.conf with new keypair"
+  ui_print "- Your public key: $pubkey"
+  ui_print "- ⚠ Edit config to fill in server info before starting"
 else
   ui_print "- Existing config found, keeping it"
 fi
 
 # install default module settings if not exists
-if [ ! -f "$wg_data/autostart.conf" ]; then
-  echo "AUTO_START=1" > "$wg_data/autostart.conf"
-  set_perm "$wg_data/autostart.conf" 0 0 0644
+if [ ! -f "$wg_data/autostart" ]; then
+  echo "AUTO_START=1" > "$wg_data/autostart"
+  set_perm "$wg_data/autostart" 0 0 0644
   ui_print "- Auto-start is enabled by default"
 fi
 

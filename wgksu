@@ -1,7 +1,7 @@
 #!/system/bin/sh
 
 wg_data="/data/adb/wireguard"
-autostart_file="$wg_data/autostart.conf"
+autostart_file="$wg_data/autostart"
 log_file="$wg_data/error.log"
 
 # find busybox across Magisk/KSU/APatch
