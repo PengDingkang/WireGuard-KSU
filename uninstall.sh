@@ -9,3 +9,7 @@ for conf in /data/adb/wireguard/*.conf; do
   ip link set "$iface" down 2>/dev/null
   ip link del "$iface" 2>/dev/null
 done
+
+# remove fallback binaries (keep configs)
+rm -f /data/adb/wireguard/wg
+rm -f /data/adb/wireguard/wgksu
