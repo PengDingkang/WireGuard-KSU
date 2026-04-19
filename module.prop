@@ -1,0 +1,7 @@
+id=WireGuard-KSU
+name=WireGuard KSU
+version=v1.0.0
+versionCode=10000
+author=Nagisa_Cheese
+description=Manage WireGuard VPN on Android via KSU/APatch/Magisk with WebUI (tools v1.0.20260223)
+updateJson=https://raw.githubusercontent.com/PengDingkang/WireGuard-KSU/main/update.json

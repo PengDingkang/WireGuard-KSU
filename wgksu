@@ -1,0 +1,241 @@
+#!/system/bin/sh
+
+wg_data="/data/adb/wireguard"
+autostart_file="$wg_data/autostart.conf"
+log_file="$wg_data/error.log"
+
+# find busybox across Magisk/KSU/APatch
+for bb in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox; do
+  [ -f "$bb" ] && busybox="$bb" && break
+done
+[ -z "$busybox" ] && busybox="busybox"
+
+get_autostart() {
+  AUTO_START=1
+  # shellcheck disable=SC1090
+  [ -f "$autostart_file" ] && . "$autostart_file"
+  echo "${AUTO_START:-1}"
+}
+
+set_autostart() {
+  mkdir -p "$wg_data"
+  printf "AUTO_START=%s\n" "$1" > "$autostart_file"
+}
+
+# --- wg-quick replacement for Android (sh-based) ---
+
+# parse a .conf file and extract Interface/Peer sections
+wg_up() {
+  conf="$1"
+  iface="$2"
+
+  if ip link show "$iface" >/dev/null 2>&1; then
+    echo "$iface is already up"
+    return
+  fi
+
+  if [ ! -f "$conf" ]; then
+    echo "ERROR: config not found: $conf"
+    return 1
+  fi
+
+  # extract Interface fields
+  address=$(grep -i '^Address' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
+  dns=$(grep -i '^DNS' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
+  mtu=$(grep -i '^MTU' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
+  table=$(grep -i '^Table' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
+
+  # create interface
+  ip link add "$iface" type wireguard 2>"$log_file"
+  if [ $? -ne 0 ]; then
+    echo "ERROR: failed to create WireGuard interface (kernel support missing?)"
+    cat "$log_file" 2>/dev/null
+    return 1
+  fi
+
+  # apply wg config (strip Interface-only fields, pass to wg setconf)
+  tmpconf="/tmp/wg_${iface}.conf"
+  grep -v -i '^\(Address\|DNS\|MTU\|Table\|PreUp\|PostUp\|PreDown\|PostDown\|SaveConfig\)' "$conf" > "$tmpconf"
+  wg setconf "$iface" "$tmpconf" 2>>"$log_file"
+  rm -f "$tmpconf"
+
+  # set addresses
+  IFS=','
+  for addr in $address; do
+    addr=$(echo "$addr" | tr -d ' ')
+    [ -n "$addr" ] && ip addr add "$addr" dev "$iface" 2>>"$log_file"
+  done
+  unset IFS
+
+  # set MTU
+  [ -n "$mtu" ] && ip link set "$iface" mtu "$mtu"
+  [ -z "$mtu" ] && ip link set "$iface" mtu 1420
+
+  # bring up
+  ip link set "$iface" up
+
+  # add routes for AllowedIPs
+  wg show "$iface" allowed-ips 2>/dev/null | while read -r _ ips; do
+    IFS=$'\t '
+    for cidr in $ips; do
+      [ "$cidr" = "(none)" ] && continue
+      case "$cidr" in
+        *:*) ip -6 route add "$cidr" dev "$iface" 2>/dev/null ;;
+        *)   ip -4 route add "$cidr" dev "$iface" 2>/dev/null ;;
+      esac
+    done
+    unset IFS
+  done
+
+  # DNS (set system property for Android)
+  if [ -n "$dns" ]; then
+    i=1
+    IFS=','
+    for d in $dns; do
+      d=$(echo "$d" | tr -d ' ')
+      ndc resolver setnetdns "$iface" "" "$d" 2>/dev/null || \
+        setprop net.dns${i} "$d" 2>/dev/null
+      i=$((i + 1))
+    done
+    unset IFS
+  fi
+
+  # routing policy
+  ip rule add from all lookup main pref 1 2>/dev/null
+
+  echo "$iface up"
+}
+
+wg_down() {
+  iface="$1"
+
+  if ! ip link show "$iface" >/dev/null 2>&1; then
+    echo "$iface is not up"
+    return
+  fi
+
+  ip link set "$iface" down 2>/dev/null
+  ip link del "$iface" 2>/dev/null
+  ip rule del from all lookup main pref 1 2>/dev/null
+
+  echo "$iface down"
+}
+
+# --- list available configs ---
+list_configs() {
+  ls "$wg_data"/*.conf 2>/dev/null | while read -r f; do
+    basename "$f" .conf
+  done
+}
+
+# --- interface status ---
+iface_running() {
+  ip link show "$1" >/dev/null 2>&1
+}
+
+any_running() {
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    iface=$(basename "$conf" .conf)
+    iface_running "$iface" && return 0
+  done
+  return 1
+}
+
+# --- update KSU description ---
+update_desc() {
+  command -v ksud >/dev/null 2>&1 || return
+  export KSU_MODULE="WireGuard-KSU"
+  if any_running; then
+    # get first running interface IP
+    for conf in "$wg_data"/*.conf; do
+      [ -f "$conf" ] || continue
+      iface=$(basename "$conf" .conf)
+      if iface_running "$iface"; then
+        ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [^ ]*' | head -1 | cut -d' ' -f2 | cut -d/ -f1)
+        if [ -n "$ip" ]; then
+          ksud module config set override.description "✅ Running | ${iface}: ${ip}" 2>/dev/null
+        else
+          ksud module config set override.description "✅ Running | ${iface}" 2>/dev/null
+        fi
+        return
+      fi
+    done
+  else
+    ksud module config set override.description "⏹ Stopped" 2>/dev/null
+  fi
+}
+
+# --- commands ---
+start_all() {
+  started=0
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    iface=$(basename "$conf" .conf)
+    wg_up "$conf" "$iface"
+    started=1
+  done
+  [ "$started" = "0" ] && echo "No .conf files found in $wg_data"
+}
+
+stop_all() {
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    iface=$(basename "$conf" .conf)
+    iface_running "$iface" && wg_down "$iface"
+  done
+}
+
+show_status() {
+  found=0
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    iface=$(basename "$conf" .conf)
+    found=1
+    if iface_running "$iface"; then
+      printf "\033[32m● %s is up\033[0m\n" "$iface"
+      wg show "$iface" 2>/dev/null | sed 's/^/  /'
+    else
+      printf "\033[31m● %s is down\033[0m\n" "$iface"
+    fi
+  done
+  [ "$found" = "0" ] && echo "No .conf files found in $wg_data"
+  echo ""
+  if [ "$(get_autostart)" = "1" ]; then
+    printf "● boot auto start: enabled\n"
+  else
+    printf "● boot auto start: disabled\n"
+  fi
+  update_desc
+}
+
+case "$1" in
+  start)
+    if [ -n "$2" ]; then
+      wg_up "$wg_data/$2.conf" "$2"
+    else
+      start_all
+    fi
+    update_desc
+    ;;
+  stop)
+    if [ -n "$2" ]; then
+      wg_down "$2"
+    else
+      stop_all
+    fi
+    update_desc
+    ;;
+  restart)
+    if [ -n "$2" ]; then
+      wg_down "$2"; wg_up "$wg_data/$2.conf" "$2"
+    else
+      stop_all; start_all
+    fi
+    update_desc
+    ;;
+  status)  show_status ;;
+  enable)  set_autostart 1; echo "boot auto start: enabled" ;;
+  disable) set_autostart 0; echo "boot auto start: disabled" ;;
+  *)       echo "Usage: wgksu {start|stop|restart|status|enable|disable} [interface]" ;;
+esac

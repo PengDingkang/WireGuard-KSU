@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WireGuard</title>
+<style>
+:root { --bg: #1a1a2e; --card: #16213e; --accent: #0f3460; --green: #4ecca3; --red: #e74c3c; --yellow: #e2b714; --text: #eee; --dim: #888; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 16px; }
+h2 { font-size: 18px; margin-bottom: 12px; }
+.card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+.status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.status-dot.on { background: var(--green); }
+.status-dot.off { background: var(--red); }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; }
+.row.wrap { gap: 12px; flex-wrap: wrap; }
+.btn-group { display: flex; gap: 8px; margin-top: 12px; }
+.btn { flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-start { background: var(--green); color: #000; }
+.btn-stop { background: var(--red); color: #fff; }
+.btn-restart { background: var(--accent); color: #fff; }
+.btn-save { background: var(--yellow); color: #000; }
+.btn-clear { background: #444; color: #fff; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.toggle input { width: 16px; height: 16px; accent-color: var(--green); }
+.toggle-hint { margin-top: 8px; font-size: 12px; color: var(--dim); }
+.log { background: #0d1117; border-radius: 8px; padding: 10px; margin-top: 8px; font-size: 12px; font-family: monospace; max-height: 200px; overflow-y: auto; white-space: pre-wrap; color: var(--dim); }
+.editor { background: #0d1117; border: 1px solid #333; border-radius: 8px; padding: 10px; margin-top: 8px; font-size: 12px; font-family: monospace; color: var(--text); width: 100%; min-height: 200px; resize: vertical; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--green); color: #000; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; display: none; z-index: 99; }
+.toast.error { background: var(--red); color: #fff; }
+
+.info-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.info-table td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.info-table td:first-child { color: var(--dim); white-space: nowrap; width: 1%; }
+.info-table td:last-child { word-break: break-all; }
+.info-table tr:last-child td { border-bottom: none; }
+
+.peer-card { background: var(--accent); border-radius: 10px; padding: 12px; margin-top: 8px; }
+.peer-card .peer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.peer-card .peer-name { font-weight: 600; font-size: 13px; font-family: monospace; word-break: break-all; }
+.peer-card .peer-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+.peer-badge.active { background: var(--green); color: #000; }
+.peer-badge.inactive { background: var(--dim); color: #fff; }
+.peer-card .peer-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 12px; }
+.peer-card .peer-detail .dim { color: var(--dim); }
+
+.iface-tab { display: inline-block; padding: 6px 14px; margin-right: 4px; margin-bottom: 8px; border-radius: 8px; font-size: 13px; cursor: pointer; background: var(--accent); }
+.iface-tab.active { background: var(--green); color: #000; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="row">
+    <h2>WireGuard</h2>
+    <span id="statusBadge"><span class="status-dot off"></span>Checking...</span>
+  </div>
+  <div id="ifaceTabs"></div>
+  <div id="ifaceInfo"></div>
+  <div class="btn-group">
+    <button class="btn btn-start" onclick="control('start')">Start</button>
+    <button class="btn btn-stop" onclick="control('stop')">Stop</button>
+    <button class="btn btn-restart" onclick="control('restart')">Restart</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Peers</h2>
+  <div id="peers"><div style="color:var(--dim);padding:8px">Loading...</div></div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <h2>Config</h2>
+    <button class="btn btn-save" style="flex:none;padding:6px 16px" onclick="toggleEdit()" id="editBtn">Edit</button>
+  </div>
+  <div class="row wrap">
+    <label class="toggle">
+      <input type="checkbox" id="autoStartToggle" onchange="saveAutoStart(this.checked)">
+      <span>Boot Auto Start</span>
+    </label>
+    <span id="autoStartStatus" style="font-size:13px;color:var(--dim)">Loading...</span>
+  </div>
+  <div class="toggle-hint">Controls whether WireGuard starts automatically after boot.</div>
+  <div id="configView" class="log">Loading...</div>
+  <textarea id="configEdit" class="editor" style="display:none"></textarea>
+  <div id="configBtns" class="btn-group" style="display:none">
+    <button class="btn btn-save" onclick="saveConfig()">Save</button>
+    <button class="btn btn-restart" onclick="saveAndRestart()">Save & Restart</button>
+    <button class="btn btn-stop" onclick="cancelEdit()">Cancel</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <h2>Error Log</h2>
+    <button class="btn btn-clear" style="flex:none;padding:6px 16px" onclick="clearLog()">Clear</button>
+  </div>
+  <div id="log" class="log">Loading...</div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { exec } from 'https://esm.sh/kernelsu';
+
+const WG_DATA = '/data/adb/wireguard';
+let currentIface = '';
+
+async function run(cmd) {
+  try {
+    const { errno, stdout, stderr } = await exec(cmd);
+    return { errno, stdout: stdout || '', stderr: stderr || '' };
+  } catch(e) {
+    return { errno: -1, stdout: '', stderr: e.message };
+  }
+}
+
+function stripAnsi(t) {
+  return String(t||'').replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g,'').replace(/\x1B[@-_]/g,'');
+}
+
+function toast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = isError ? 'toast error' : 'toast';
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 2500);
+}
+
+function humanBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KiB';
+  if (b < 1073741824) return (b/1048576).toFixed(1) + ' MiB';
+  return (b/1073741824).toFixed(2) + ' GiB';
+}
+
+function timeAgo(ts) {
+  if (!ts || ts === '0') return 'never';
+  const sec = Math.floor(Date.now()/1000) - parseInt(ts);
+  if (sec < 60) return sec + 's ago';
+  if (sec < 3600) return Math.floor(sec/60) + 'm ago';
+  if (sec < 86400) return Math.floor(sec/3600) + 'h ago';
+  return Math.floor(sec/86400) + 'd ago';
+}
+
+// parse `wg show <iface>` output
+function parseWgShow(text) {
+  const result = { iface: {}, peers: [] };
+  let current = null;
+  for (const line of text.split('\n')) {
+    const m = line.match(/^(\s*)(\S.+?):\s*(.*)$/);
+    if (!m) continue;
+    const [, indent, key, val] = m;
+    if (!indent || indent.length === 0) {
+      if (key.startsWith('peer')) {
+        current = { publicKey: val };
+        result.peers.push(current);
+      } else {
+        current = null;
+      }
+    } else if (current) {
+      current[key.replace(/\s+/g,'')] = val;
+    } else {
+      result.iface[key.replace(/\s+/g,'')] = val;
+    }
+  }
+  return result;
+}
+
+async function getInterfaces() {
+  const r = await run(`ls ${WG_DATA}/*.conf 2>/dev/null`);
+  return r.stdout.trim().split('\n').filter(Boolean).map(f => {
+    const m = f.match(/([^/]+)\.conf$/);
+    return m ? m[1] : null;
+  }).filter(Boolean);
+}
+
+async function refresh() {
+  const ifaces = await getInterfaces();
+
+  if (!ifaces.length) {
+    document.getElementById('statusBadge').innerHTML = '<span class="status-dot off"></span>No configs';
+    document.getElementById('ifaceTabs').innerHTML = '';
+    document.getElementById('ifaceInfo').innerHTML = '';
+    document.getElementById('peers').innerHTML = '<div style="color:var(--dim);padding:8px">No .conf files in /data/adb/wireguard/</div>';
+    document.getElementById('configView').textContent = 'No config files found';
+    return;
+  }
+
+  if (!currentIface || !ifaces.includes(currentIface)) currentIface = ifaces[0];
+
+  // tabs
+  document.getElementById('ifaceTabs').innerHTML = ifaces.map(i =>
+    `<span class="iface-tab ${i===currentIface?'active':''}" onclick="switchIface('${i}')">${i}</span>`
+  ).join('');
+
+  // check if current interface is up
+  const linkCheck = await run(`ip link show ${currentIface} 2>/dev/null`);
+  const isUp = linkCheck.errno === 0 && linkCheck.stdout.includes('UP');
+
+  // overall status
+  const anyUp = await run('wg show interfaces 2>/dev/null');
+  const runningIfaces = anyUp.stdout.trim();
+  if (runningIfaces) {
+    document.getElementById('statusBadge').innerHTML = `<span class="status-dot on"></span>Running (${runningIfaces.replace(/\n/g,', ')})`;
+  } else {
+    document.getElementById('statusBadge').innerHTML = '<span class="status-dot off"></span>Stopped';
+  }
+
+  // interface info
+  if (isUp) {
+    const wgOut = await run(`wg show ${currentIface} 2>/dev/null`);
+    const parsed = parseWgShow(wgOut.stdout);
+    const ipOut = await run(`ip -4 addr show ${currentIface} 2>/dev/null`);
+    const ipMatch = ipOut.stdout.match(/inet ([^\s]+)/);
+
+    document.getElementById('ifaceInfo').innerHTML = `<table class="info-table">
+      <tr><td>Interface</td><td>${currentIface}</td></tr>
+      ${ipMatch ? `<tr><td>Address</td><td>${ipMatch[1]}</td></tr>` : ''}
+      ${parsed.iface.listeningport ? `<tr><td>Listen Port</td><td>${parsed.iface.listeningport}</td></tr>` : ''}
+      ${parsed.iface.publickey ? `<tr><td>Public Key</td><td style="font-family:monospace;font-size:11px">${parsed.iface.publickey}</td></tr>` : ''}
+    </table>`;
+
+    // peers
+    if (parsed.peers.length) {
+      document.getElementById('peers').innerHTML = parsed.peers.map(p => {
+        const handshake = p.latesthandshake || '0';
+        const sec = Math.floor(Date.now()/1000) - parseInt(handshake);
+        const active = handshake !== '0' && sec < 180;
+        const rx = p.transferreceived || '';
+        const tx = p.transfersent || '';
+        return `<div class="peer-card">
+          <div class="peer-header">
+            <span class="peer-name">${p.publicKey.substring(0,20)}...</span>
+            <span class="peer-badge ${active?'active':'inactive'}">${active?'active':'idle'}</span>
+          </div>
+          <div class="peer-detail">
+            ${p.endpoint ? `<span><span class="dim">Endpoint</span> ${p.endpoint}</span>` : ''}
+            <span><span class="dim">Handshake</span> ${timeAgo(handshake)}</span>
+            ${p.allowedips ? `<span><span class="dim">Allowed IPs</span> ${p.allowedips}</span>` : ''}
+            ${rx ? `<span><span class="dim">Transfer</span> ↓${rx} ↑${tx}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    } else {
+      document.getElementById('peers').innerHTML = '<div style="color:var(--dim);padding:8px">No peers configured</div>';
+    }
+  } else {
+    document.getElementById('ifaceInfo').innerHTML = `<table class="info-table"><tr><td>${currentIface}</td><td style="color:var(--red)">Down</td></tr></table>`;
+    document.getElementById('peers').innerHTML = '<div style="color:var(--dim);padding:8px">Interface not running</div>';
+  }
+
+  // config
+  if (!window._editing) {
+    const cfg = await run(`cat ${WG_DATA}/${currentIface}.conf 2>/dev/null`);
+    document.getElementById('configView').textContent = cfg.stdout || 'Config not found';
+  }
+
+  // autostart
+  const as = await run(`sh -c 'AUTO_START=1; [ -f ${WG_DATA}/autostart.conf ] && . ${WG_DATA}/autostart.conf; echo \${AUTO_START:-1}'`);
+  const enabled = as.stdout.trim() !== '0';
+  document.getElementById('autoStartToggle').checked = enabled;
+  document.getElementById('autoStartStatus').textContent = enabled ? 'Enabled' : 'Disabled';
+
+  // log
+  const log = await run(`tail -50 ${WG_DATA}/error.log 2>/dev/null`);
+  document.getElementById('log').textContent = stripAnsi(log.stdout) || 'No errors';
+}
+
+window.switchIface = function(name) {
+  currentIface = name;
+  if (window._editing) cancelEdit();
+  refresh();
+};
+
+window.control = async function(action) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '...';
+  await run(`wgksu ${action}`);
+  await new Promise(r => setTimeout(r, 1000));
+  await refresh();
+  btn.disabled = false;
+  btn.textContent = action.charAt(0).toUpperCase() + action.slice(1);
+};
+
+window.toggleEdit = async function() {
+  if (!window._editing) {
+    const cfg = await run(`cat ${WG_DATA}/${currentIface}.conf 2>/dev/null`);
+    document.getElementById('configEdit').value = cfg.stdout;
+    document.getElementById('configView').style.display = 'none';
+    document.getElementById('configEdit').style.display = 'block';
+    document.getElementById('configBtns').style.display = 'flex';
+    document.getElementById('editBtn').textContent = 'Editing...';
+    document.getElementById('editBtn').disabled = true;
+    window._editing = true;
+  }
+};
+
+window.cancelEdit = function() {
+  document.getElementById('configView').style.display = 'block';
+  document.getElementById('configEdit').style.display = 'none';
+  document.getElementById('configBtns').style.display = 'none';
+  document.getElementById('editBtn').textContent = 'Edit';
+  document.getElementById('editBtn').disabled = false;
+  window._editing = false;
+};
+
+window.saveConfig = async function() {
+  const content = document.getElementById('configEdit').value;
+  const r = await run(`cat > ${WG_DATA}/${currentIface}.conf << 'WGCONF'\n${content}\nWGCONF`);
+  if (r.errno === 0) {
+    toast('Config saved');
+    cancelEdit();
+    await refresh();
+  } else {
+    toast('Save failed: ' + r.stderr, true);
+  }
+};
+
+window.saveAndRestart = async function() {
+  await saveConfig();
+  await run('wgksu restart');
+  await new Promise(r => setTimeout(r, 1000));
+  await refresh();
+  toast('Config saved & restarted');
+};
+
+window.saveAutoStart = async function(enabled) {
+  const toggle = document.getElementById('autoStartToggle');
+  const status = document.getElementById('autoStartStatus');
+  toggle.disabled = true; status.textContent = 'Saving...';
+  const r = await run(`cat > ${WG_DATA}/autostart.conf << 'WGAUTO'\nAUTO_START=${enabled?'1':'0'}\nWGAUTO`);
+  toggle.disabled = false;
+  if (r.errno === 0) {
+    toggle.checked = enabled;
+    status.textContent = enabled ? 'Enabled' : 'Disabled';
+    toast(enabled ? 'Boot auto start enabled' : 'Boot auto start disabled');
+  } else {
+    toggle.checked = !enabled;
+    status.textContent = (!enabled) ? 'Enabled' : 'Disabled';
+    toast('Save failed: ' + r.stderr, true);
+  }
+};
+
+window.clearLog = async function() {
+  const r = await run(`: > ${WG_DATA}/error.log`);
+  if (r.errno === 0) {
+    document.getElementById('log').textContent = 'No errors';
+    toast('Error log cleared');
+  } else {
+    toast('Clear failed: ' + r.stderr, true);
+  }
+};
+
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>
