@@ -84,10 +84,15 @@ fi
 
 # install binaries
 ui_print "- Installing binaries"
+# overlay mount
 mkdir -p "$MODPATH/system/bin"
-mv -f "$MODPATH/wg" "$MODPATH/system/bin/"
-mv -f "$MODPATH/wgksu" "$MODPATH/system/bin/"
-rm -f "$MODPATH/wg0.conf.example"
+cp -f "$MODPATH/wg" "$MODPATH/system/bin/"
+cp -f "$MODPATH/wgksu" "$MODPATH/system/bin/"
+# fallback: also install to data dir (works without overlay/magic mount)
+cp -f "$MODPATH/wg" "$wg_data/wg"
+cp -f "$MODPATH/wgksu" "$wg_data/wgksu"
+chmod 755 "$wg_data/wg" "$wg_data/wgksu"
+rm -f "$MODPATH/wg" "$MODPATH/wgksu" "$MODPATH/wg0.conf.example"
 
 # permissions
 ui_print "- Setting permissions"

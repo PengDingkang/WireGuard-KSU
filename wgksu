@@ -4,6 +4,13 @@ wg_data="/data/adb/wireguard"
 autostart_file="$wg_data/autostart"
 log_file="$wg_data/error.log"
 
+# resolve wg binary path: prefer PATH, fallback to data dir
+if command -v wg >/dev/null 2>&1; then
+  WG=wg
+else
+  WG="$wg_data/wg"
+fi
+
 # find busybox across Magisk/KSU/APatch
 for bb in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox; do
   [ -f "$bb" ] && busybox="$bb" && break
@@ -84,7 +91,7 @@ wg_up() {
           lk == "endpoint" || lk == "persistentkeepalive") print
     }
   ' "$conf" > "$tmpconf"
-  wg setconf "$iface" "$tmpconf" 2>>"$log_file"
+  $WG setconf "$iface" "$tmpconf" 2>>"$log_file"
   rm -f "$tmpconf"
 
   # set addresses
@@ -103,7 +110,7 @@ wg_up() {
   ip link set "$iface" up
 
   # add routes for AllowedIPs
-  wg show "$iface" allowed-ips 2>/dev/null | while read -r _ ips; do
+  $WG show "$iface" allowed-ips 2>/dev/null | while read -r _ ips; do
     for cidr in $ips; do
       [ "$cidr" = "(none)" ] && continue
       case "$cidr" in
@@ -220,7 +227,7 @@ show_status() {
     found=1
     if iface_running "$iface"; then
       printf "\033[32m● %s is up\033[0m\n" "$iface"
-      wg show "$iface" 2>/dev/null | sed 's/^/  /'
+      $WG show "$iface" 2>/dev/null | sed 's/^/  /'
     else
       printf "\033[31m● %s is down\033[0m\n" "$iface"
     fi
@@ -264,8 +271,8 @@ case "$1" in
   enable)  set_autostart 1; echo "boot auto start: enabled" ;;
   disable) set_autostart 0; echo "boot auto start: disabled" ;;
   genkey)
-    privkey=$(wg genkey)
-    pubkey=$(echo "$privkey" | wg pubkey)
+    privkey=$($WG genkey)
+    pubkey=$(echo "$privkey" | $WG pubkey)
     echo "Private Key: $privkey"
     echo "Public Key:  $pubkey"
     ;;
