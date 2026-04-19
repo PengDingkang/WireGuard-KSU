@@ -40,11 +40,11 @@ wg_up() {
   fi
 
   # basic config validation
-  if ! grep -qi '^\[Interface\]' "$conf"; then
+  if ! grep -qi '^[[:space:]]*\[Interface\]' "$conf"; then
     echo "ERROR: missing [Interface] section in $conf"
     return 1
   fi
-  if ! grep -qi '^PrivateKey' "$conf"; then
+  if ! grep -qi '^[[:space:]]*PrivateKey' "$conf"; then
     echo "ERROR: missing PrivateKey in $conf"
     return 1
   fi
@@ -52,15 +52,15 @@ wg_up() {
     echo "ERROR: $conf still has placeholder values, edit before starting"
     return 1
   fi
-  if ! grep -qi '^\[Peer\]' "$conf"; then
+  if ! grep -qi '^[[:space:]]*\[Peer\]' "$conf"; then
     echo "ERROR: missing [Peer] section in $conf"
     return 1
   fi
 
   # extract Interface fields
-  address=$(grep -i '^Address' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
-  dns=$(grep -i '^DNS' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
-  mtu=$(grep -i '^MTU' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
+  address=$(grep -i '^[[:space:]]*Address' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
+  dns=$(grep -i '^[[:space:]]*DNS' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
+  mtu=$(grep -i '^[[:space:]]*MTU' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
 
   # create interface
   if ! ip link add "$iface" type wireguard 2>"$log_file"; then
@@ -71,7 +71,7 @@ wg_up() {
 
   # apply wg config (strip Interface-only fields, pass to wg setconf)
   tmpconf="/tmp/wg_${iface}.conf"
-  grep -v -i '^\(Address\|DNS\|MTU\|Table\|PreUp\|PostUp\|PreDown\|PostDown\|SaveConfig\)' "$conf" > "$tmpconf"
+  grep -v -i '^[[:space:]]*\(Address\|DNS\|MTU\|Table\|PreUp\|PostUp\|PreDown\|PostDown\|SaveConfig\)' "$conf" > "$tmpconf"
   wg setconf "$iface" "$tmpconf" 2>>"$log_file"
   rm -f "$tmpconf"
 
