@@ -71,7 +71,19 @@ wg_up() {
 
   # apply wg config (strip Interface-only fields, pass to wg setconf)
   tmpconf="/tmp/wg_${iface}.conf"
-  grep -v -i '^[[:space:]]*\(Address\|DNS\|MTU\|Table\|PreUp\|PostUp\|PreDown\|PostDown\|SaveConfig\)' "$conf" > "$tmpconf"
+  awk '
+    /^[[:space:]]*\[/ { print; next }
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*$/ { print; next }
+    {
+      key = $1
+      gsub(/[[:space:]]*=.*/, "", key)
+      lk = tolower(key)
+      if (lk == "privatekey" || lk == "listenport" || lk == "fwmark" || \
+          lk == "publickey" || lk == "presharedkey" || lk == "allowedips" || \
+          lk == "endpoint" || lk == "persistentkeepalive") print
+    }
+  ' "$conf" > "$tmpconf"
   wg setconf "$iface" "$tmpconf" 2>>"$log_file"
   rm -f "$tmpconf"
 
