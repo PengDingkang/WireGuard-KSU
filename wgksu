@@ -80,6 +80,7 @@ wg_up() {
   # apply wg config (strip Interface-only fields, pass to wg setconf)
   tmpconf="/tmp/wg_${iface}.conf"
   awk '
+    { gsub(/\r/, "") }
     /^[[:space:]]*\[/ { print; next }
     /^[[:space:]]*#/ { next }
     /^[[:space:]]*$/ { print; next }
