@@ -327,7 +327,7 @@ window.switchIface = function(name) {
 window.control = async function(action) {
   const btn = event.target;
   btn.disabled = true; btn.textContent = '...';
-  await run(`${wgksuCmd} ${action}`);
+  await run(`${wgksuCmd} ${action} ${currentIface}`);
   await new Promise(r => setTimeout(r, 1000));
   await refresh();
   btn.disabled = false;
