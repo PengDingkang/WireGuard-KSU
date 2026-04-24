@@ -327,8 +327,10 @@ window.switchIface = function(name) {
 window.control = async function(action) {
   const btn = event.target;
   btn.disabled = true; btn.textContent = '...';
-  await run(`${wgksuCmd} ${action} ${currentIface}`);
-  await new Promise(r => setTimeout(r, 1000));
+  const timeout = new Promise(r => setTimeout(() => r({ errno: -1, stdout: '', stderr: 'timeout' }), 15000));
+  const result = await Promise.race([run(`${wgksuCmd} ${action} ${currentIface}`), timeout]);
+  if (result.stderr === 'timeout') toast('Command timed out', true);
+  await new Promise(r => setTimeout(r, 500));
   await refresh();
   btn.disabled = false;
   btn.textContent = action.charAt(0).toUpperCase() + action.slice(1);

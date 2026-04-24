@@ -93,7 +93,14 @@ wg_up() {
     }
   ' "$conf" > "$tmpconf"
   $WG setconf "$iface" "$tmpconf" 2>>"$log_file"
+  wg_setconf_ret=$?
   rm -f "$tmpconf"
+
+  if [ "$wg_setconf_ret" -ne 0 ]; then
+    echo "ERROR: wg setconf failed for $iface"
+    ip link del "$iface" 2>/dev/null
+    return 1
+  fi
 
   # set addresses
   IFS=','
@@ -266,6 +273,7 @@ reresolve_dns() {
 
     # parse each peer's public key and endpoint from conf
     awk '
+      { gsub(/\r/, "") }
       /^\[Peer\]/       { peer=1; pk=""; ep=""; next }
       /^\[/             { if(peer && pk && ep) print pk " " ep; peer=0; next }
       peer && /^[[:space:]]*PublicKey/  { gsub(/.*= */, ""); pk=$0 }
