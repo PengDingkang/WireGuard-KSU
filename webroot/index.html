@@ -213,6 +213,18 @@ function parseWgShow(text) {
   return result;
 }
 
+// parse `wg show <iface> dump` — tab-separated, first line is interface
+function parseDump(text) {
+  const peers = {};
+  for (const line of text.split('\n').slice(1)) {
+    const cols = line.split('\t');
+    if (cols.length >= 7) {
+      peers[cols[0]] = { endpoint: cols[2], latestHandshake: cols[4], rx: cols[5], tx: cols[6] };
+    }
+  }
+  return peers;
+}
+
 async function getInterfaces() {
   const r = await run(`ls ${WG_DATA}/*.conf 2>/dev/null`);
   return r.stdout.trim().split('\n').filter(Boolean).map(f => {
@@ -262,6 +274,8 @@ async function refresh() {
   if (isUp) {
     const wgOut = await run(`${wgCmd} show ${currentIface} 2>/dev/null`);
     const parsed = parseWgShow(wgOut.stdout);
+    const dumpOut = await run(`${wgCmd} show ${currentIface} dump 2>/dev/null`);
+    const dumpPeers = parseDump(dumpOut.stdout);
     const ipOut = await run(`ip -4 addr show ${currentIface} 2>/dev/null`);
     const ipMatch = ipOut.stdout.match(/inet ([^\s]+)/);
 
@@ -275,18 +289,20 @@ async function refresh() {
     // peers
     if (parsed.peers.length) {
       document.getElementById('peers').innerHTML = parsed.peers.map(p => {
-        const handshake = p.latesthandshake || '0';
+        const dump = dumpPeers[p.publicKey] || {};
+        const handshake = dump.latestHandshake || '0';
         const sec = Math.floor(Date.now()/1000) - parseInt(handshake);
         const active = handshake !== '0' && sec < 180;
-        const rx = p.transferreceived || '';
-        const tx = p.transfersent || '';
+        const rx = dump.rx ? humanBytes(parseInt(dump.rx)) : '';
+        const tx = dump.tx ? humanBytes(parseInt(dump.tx)) : '';
+        const endpoint = dump.endpoint || p.endpoint || '';
         return `<div class="peer-card">
           <div class="peer-header">
             <span class="peer-name">${p.publicKey.substring(0,20)}...</span>
             <span class="peer-badge ${active?'active':'inactive'}">${active?'active':'idle'}</span>
           </div>
           <div class="peer-detail">
-            ${p.endpoint ? `<span><span class="dim">Endpoint</span> ${p.endpoint}</span>` : ''}
+            ${endpoint && endpoint !== '(none)' ? `<span><span class="dim">Endpoint</span> ${endpoint}</span>` : ''}
             <span><span class="dim">Handshake</span> ${timeAgo(handshake)}</span>
             ${p.allowedips ? `<span><span class="dim">Allowed IPs</span> ${p.allowedips}</span>` : ''}
             ${rx ? `<span><span class="dim">Transfer</span> ↓${rx} ↑${tx}</span>` : ''}
