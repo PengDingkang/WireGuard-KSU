@@ -427,18 +427,17 @@ window.createNewConfig = async function(ifaceName) {
   const lines = r.stdout.trim().split('\n');
   if (lines.length !== 2) { toast('Failed to generate keypair', true); return; }
   const conf = `[Interface]\nPrivateKey = ${lines[0]}\nAddress = 10.0.0.2/24\n# DNS = 1.1.1.1\n# MTU = 1420\n\n[Peer]\nPublicKey = REPLACE_WITH_SERVER_PUBLIC_KEY\nEndpoint = REPLACE_WITH_SERVER_IP:51820\nAllowedIPs = 10.0.0.0/24\nPersistentKeepalive = 25`;
-  document.getElementById('configView').style.display = 'none';
-  document.getElementById('configEdit').style.display = 'block';
-  document.getElementById('configEdit').value = conf;
-  document.getElementById('configBtns').style.display = 'flex';
-  document.getElementById('editBtn').textContent = 'Editing...';
-  document.getElementById('editBtn').disabled = true;
+  // write file immediately so tab appears
+  const w = await run(`printf '%b' '${conf.replace(/'/g,"'\\''")}'  > ${WG_DATA}/${name}.conf`);
+  if (w.errno !== 0) { toast('Failed to create config: ' + w.stderr, true); return; }
+  // switch to new tab and open editor
+  currentIface = name;
+  await refresh();
   document.getElementById('keyPriv').textContent = lines[0];
   document.getElementById('keyPub').textContent = lines[1];
   document.getElementById('keyResult').style.display = 'block';
-  currentIface = name;
-  window._editing = true;
-  toast(`New config "${name}" — copy the public key to your server`);
+  toggleEdit();
+  toast(`New config "${name}" — edit and save when ready`);
 };
 
 window.addNewIface = async function() {
