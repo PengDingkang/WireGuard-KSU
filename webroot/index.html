@@ -103,6 +103,31 @@ h2 { font-size: 18px; margin-bottom: 12px; }
 
 <div class="card">
   <div class="row">
+    <h2>DNS Re-resolve</h2>
+    <button class="btn btn-start" style="flex:none;padding:6px 16px" onclick="triggerReresolve()">Run Now</button>
+  </div>
+  <div class="row wrap">
+    <label class="toggle">
+      <input type="checkbox" id="reresolveToggle" onchange="saveReresolve()">
+      <span>Auto Re-resolve</span>
+    </label>
+    <span id="reresolveStatus" style="font-size:13px;color:var(--dim)">Loading...</span>
+  </div>
+  <div class="toggle-hint">Periodically re-resolve domain endpoints and update peers when IP changes. Requires reboot to take effect.</div>
+  <div class="row" style="margin-top:10px;gap:8px">
+    <label style="font-size:13px;white-space:nowrap">Interval (sec)</label>
+    <input type="number" id="reresolveInterval" min="30" max="3600" value="120" style="width:80px;padding:6px 8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:var(--text);font-size:13px">
+    <button class="btn btn-save" style="flex:none;padding:6px 16px" onclick="saveReresolve()">Save</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <span style="font-size:13px;color:var(--dim)">Re-resolve Log</span>
+    <button class="btn btn-clear" style="flex:none;padding:4px 12px;font-size:12px" onclick="clearReresolveLog()">Clear</button>
+  </div>
+  <div id="reresolveLog" class="log" style="max-height:150px">Loading...</div>
+</div>
+
+<div class="card">
+  <div class="row">
     <h2>Error Log</h2>
     <button class="btn btn-clear" style="flex:none;padding:6px 16px" onclick="clearLog()">Clear</button>
   </div>
@@ -441,9 +466,48 @@ window.deleteConfig = async function() {
   }
 };
 
+window.triggerReresolve = async function() {
+  toast('Running DNS re-resolve...');
+  await run(`${wgksuCmd} reresolve-dns`);
+  const log = await run(`tail -20 ${WG_DATA}/reresolve.log 2>/dev/null`);
+  document.getElementById('reresolveLog').textContent = log.stdout.trim() || 'No changes detected';
+  toast('Re-resolve complete');
+};
+
+window.saveReresolve = async function() {
+  const enabled = document.getElementById('reresolveToggle').checked ? '1' : '0';
+  const interval = document.getElementById('reresolveInterval').value || '120';
+  const r = await run(`cat > ${WG_DATA}/reresolve << 'WGRR'\nRERESOLVE_ENABLED=${enabled}\nRERESOLVE_INTERVAL=${interval}\nWGRR`);
+  if (r.errno === 0) {
+    document.getElementById('reresolveStatus').textContent = enabled === '1' ? `Enabled (${interval}s)` : 'Disabled';
+    toast('Re-resolve settings saved');
+  } else {
+    toast('Save failed: ' + r.stderr, true);
+  }
+};
+
+window.clearReresolveLog = async function() {
+  await run(`: > ${WG_DATA}/reresolve.log`);
+  document.getElementById('reresolveLog').textContent = 'No entries';
+  toast('Re-resolve log cleared');
+};
+
+async function refreshReresolve() {
+  const cfg = await run(`sh -c 'RERESOLVE_ENABLED=1; RERESOLVE_INTERVAL=120; [ -f ${WG_DATA}/reresolve ] && . ${WG_DATA}/reresolve; echo "$RERESOLVE_ENABLED $RERESOLVE_INTERVAL"'`);
+  const parts = cfg.stdout.trim().split(' ');
+  const enabled = (parts[0] || '1') !== '0';
+  const interval = parts[1] || '120';
+  document.getElementById('reresolveToggle').checked = enabled;
+  document.getElementById('reresolveInterval').value = interval;
+  document.getElementById('reresolveStatus').textContent = enabled ? `Enabled (${interval}s)` : 'Disabled';
+  const log = await run(`tail -20 ${WG_DATA}/reresolve.log 2>/dev/null`);
+  document.getElementById('reresolveLog').textContent = log.stdout.trim() || 'No entries';
+}
+
 initCmd().then(() => {
   refresh();
-  setInterval(refresh, 10000);
+  refreshReresolve();
+  setInterval(() => { refresh(); refreshReresolve(); }, 10000);
 });
 </script>
 </body>

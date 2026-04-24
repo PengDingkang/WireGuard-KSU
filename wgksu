@@ -3,6 +3,7 @@
 wg_data="/data/adb/wireguard"
 autostart_file="$wg_data/autostart"
 log_file="$wg_data/error.log"
+reresolve_log="$wg_data/reresolve.log"
 
 # resolve wg binary path: prefer PATH, fallback to data dir
 if command -v wg >/dev/null 2>&1; then
@@ -242,6 +243,61 @@ show_status() {
   update_desc
 }
 
+# --- DNS re-resolve for domain endpoints ---
+# resolve hostname to IP using available Android tools
+resolve_host() {
+  host="$1"
+  # try ping first (most reliable on Android)
+  ip=$(ping -c1 -W2 "$host" 2>/dev/null | head -1 | grep -oE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)' | tr -d '()')
+  [ -n "$ip" ] && echo "$ip" && return
+  # try getent
+  ip=$(getent hosts "$host" 2>/dev/null | awk '{print $1; exit}')
+  [ -n "$ip" ] && echo "$ip" && return
+  # try busybox nslookup
+  ip=$($busybox nslookup "$host" 2>/dev/null | awk '/^Address/&&NR>2{gsub(/#.*/,"",$2);print $2;exit}')
+  [ -n "$ip" ] && echo "$ip"
+}
+
+# re-resolve domain endpoints for running interfaces, update if IP changed
+reresolve_dns() {
+  filter="$1"
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    iface=$(basename "$conf" .conf)
+    [ -n "$filter" ] && [ "$filter" != "$iface" ] && continue
+    iface_running "$iface" || continue
+
+    # parse each peer's public key and endpoint from conf
+    awk '
+      /^\[Peer\]/       { peer=1; pk=""; ep=""; next }
+      /^\[/             { if(peer && pk && ep) print pk " " ep; peer=0; next }
+      peer && /^[[:space:]]*PublicKey/  { gsub(/.*= */, ""); pk=$0 }
+      peer && /^[[:space:]]*Endpoint/  { gsub(/.*= */, ""); ep=$0 }
+      END { if(peer && pk && ep) print pk " " ep }
+    ' "$conf" | while read -r pubkey endpoint; do
+      # split host:port — skip if endpoint is already a raw IP
+      host="${endpoint%:*}"
+      port="${endpoint##*:}"
+      case "$host" in
+        *[0-9].[0-9]*) continue ;;  # looks like an IP, skip
+      esac
+
+      new_ip=$(resolve_host "$host")
+      [ -z "$new_ip" ] && continue
+
+      # get current endpoint IP from wg show
+      cur=$($WG show "$iface" endpoints 2>/dev/null | grep "^${pubkey}" | awk '{print $2}')
+      cur_ip="${cur%:*}"
+
+      if [ "$new_ip" != "$cur_ip" ]; then
+        $WG set "$iface" peer "$pubkey" endpoint "${new_ip}:${port}" 2>>"$log_file"
+        echo "[reresolve] $iface: $host changed $cur_ip -> $new_ip"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') $iface: $host $cur_ip -> $new_ip" >> "$reresolve_log"
+      fi
+    done
+  done
+}
+
 case "$1" in
   start)
     if [ -n "$2" ]; then
@@ -276,5 +332,11 @@ case "$1" in
     echo "Private Key: $privkey"
     echo "Public Key:  $pubkey"
     ;;
-  *)       echo "Usage: wgksu {start|stop|restart|status|enable|disable|genkey} [interface]" ;;
+  reresolve-dns)
+    reresolve_dns "$2"
+    ;;
+  reresolve-log)
+    tail -50 "$reresolve_log" 2>/dev/null || echo "No re-resolve log"
+    ;;
+  *)       echo "Usage: wgksu {start|stop|restart|status|enable|disable|genkey|reresolve-dns} [interface]" ;;
 esac
