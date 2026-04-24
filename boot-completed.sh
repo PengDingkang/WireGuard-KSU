@@ -13,7 +13,7 @@
     . /data/adb/wireguard/autostart
     auto_start=${AUTO_START:-1}
   fi
-  [ "$auto_start" = "1" ] || exit 0
+  [ "$auto_start" = "1" ] || { wgksu status >/dev/null 2>&1; exit 0; }
 
   # skip if no real configs (only example)
   real_conf=0

@@ -181,20 +181,17 @@ update_desc() {
   command -v ksud >/dev/null 2>&1 || return
   export KSU_MODULE="WireGuard-KSU"
   if any_running; then
-    # get first running interface IP
+    desc=""
     for conf in "$wg_data"/*.conf; do
       [ -f "$conf" ] || continue
       iface=$(basename "$conf" .conf)
       if iface_running "$iface"; then
         ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [^ ]*' | head -1 | cut -d' ' -f2 | cut -d/ -f1)
-        if [ -n "$ip" ]; then
-          ksud module config set override.description "✅ Running | ${iface}: ${ip}" 2>/dev/null
-        else
-          ksud module config set override.description "✅ Running | ${iface}" 2>/dev/null
-        fi
-        return
+        if [ -n "$desc" ]; then desc="$desc | "; fi
+        desc="${desc}${iface}: ${ip:-?}"
       fi
     done
+    ksud module config set override.description "✅ Running | ${desc}" 2>/dev/null
   else
     ksud module config set override.description "⏹ Stopped" 2>/dev/null
   fi
