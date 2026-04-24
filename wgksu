@@ -19,15 +19,34 @@ done
 [ -z "$busybox" ] && busybox="busybox"
 
 get_autostart() {
-  AUTO_START=1
-  # shellcheck disable=SC1090
-  [ -f "$autostart_file" ] && . "$autostart_file"
-  echo "${AUTO_START:-1}"
+  iface="$1"
+  if [ -n "$iface" ] && [ -f "$wg_data/autostart.${iface}" ]; then
+    AUTO_START=1
+    # shellcheck disable=SC1090
+    . "$wg_data/autostart.${iface}"
+    echo "${AUTO_START:-1}"
+  elif [ -f "$autostart_file" ]; then
+    AUTO_START=1
+    # shellcheck disable=SC1090
+    . "$autostart_file"
+    echo "${AUTO_START:-1}"
+  else
+    echo "1"
+  fi
 }
 
 set_autostart() {
   mkdir -p "$wg_data"
-  printf "AUTO_START=%s\n" "$1" > "$autostart_file"
+  if [ -n "$2" ]; then
+    printf "AUTO_START=%s\n" "$1" > "$wg_data/autostart.$2"
+  else
+    printf "AUTO_START=%s\n" "$1" > "$autostart_file"
+  fi
+}
+
+# log with interface prefix
+wg_log() {
+  printf '%s [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "$2" >> "$log_file"
 }
 
 # --- wg-quick replacement for Android (sh-based) ---
@@ -72,6 +91,7 @@ wg_up() {
 
   # create interface
   if ! ip link add "$iface" type wireguard 2>"$log_file"; then
+    wg_log "$iface" "failed to create WireGuard interface (kernel support missing?)"
     echo "ERROR: failed to create WireGuard interface (kernel support missing?)"
     cat "$log_file" 2>/dev/null
     return 1
@@ -120,6 +140,7 @@ wg_up() {
   rm -f "$tmpconf"
 
   if [ "$wg_setconf_ret" -ne 0 ]; then
+    wg_log "$iface" "wg setconf failed"
     echo "ERROR: wg setconf failed for $iface"
     ip link del "$iface" 2>/dev/null
     return 1
@@ -262,11 +283,15 @@ show_status() {
   done
   [ "$found" = "0" ] && echo "No .conf files found in $wg_data"
   echo ""
-  if [ "$(get_autostart)" = "1" ]; then
-    printf "● boot auto start: enabled\n"
-  else
-    printf "● boot auto start: disabled\n"
-  fi
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    iface=$(basename "$conf" .conf)
+    if [ "$(get_autostart "$iface")" = "1" ]; then
+      printf "● %s boot auto start: enabled\n" "$iface"
+    else
+      printf "● %s boot auto start: disabled\n" "$iface"
+    fi
+  done
   update_desc
 }
 
@@ -352,8 +377,8 @@ case "$1" in
     update_desc
     ;;
   status)  show_status ;;
-  enable)  set_autostart 1; echo "boot auto start: enabled" ;;
-  disable) set_autostart 0; echo "boot auto start: disabled" ;;
+  enable)  set_autostart 1 "$2"; echo "boot auto start: enabled${2:+ ($2)}" ;;
+  disable) set_autostart 0 "$2"; echo "boot auto start: disabled${2:+ ($2)}" ;;
   genkey)
     privkey=$($WG genkey)
     pubkey=$(echo "$privkey" | $WG pubkey)

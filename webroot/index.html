@@ -323,8 +323,8 @@ async function refresh() {
     document.getElementById('configView').textContent = cfg.stdout || 'Config not found';
   }
 
-  // autostart
-  const as = await run(`sh -c 'AUTO_START=1; [ -f ${WG_DATA}/autostart ] && . ${WG_DATA}/autostart; echo \${AUTO_START:-1}'`);
+  // autostart (per-interface)
+  const as = await run(`sh -c 'AUTO_START=1; [ -f ${WG_DATA}/autostart.${currentIface} ] && . ${WG_DATA}/autostart.${currentIface}; echo \${AUTO_START:-1}'`);
   const enabled = as.stdout.trim() !== '0';
   document.getElementById('autoStartToggle').checked = enabled;
   document.getElementById('autoStartStatus').textContent = enabled ? 'Enabled' : 'Disabled';
@@ -403,7 +403,7 @@ window.saveAutoStart = async function(enabled) {
   const toggle = document.getElementById('autoStartToggle');
   const status = document.getElementById('autoStartStatus');
   toggle.disabled = true; status.textContent = 'Saving...';
-  const r = await run(`cat > ${WG_DATA}/autostart << 'WGAUTO'\nAUTO_START=${enabled?'1':'0'}\nWGAUTO`);
+  const r = await run(`cat > ${WG_DATA}/autostart.${currentIface} << 'WGAUTO'\nAUTO_START=${enabled?'1':'0'}\nWGAUTO`);
   toggle.disabled = false;
   if (r.errno === 0) {
     toggle.checked = enabled;
