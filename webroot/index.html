@@ -485,7 +485,7 @@ window.deleteConfig = async function() {
 
 window.triggerReresolve = async function() {
   toast('Running DNS re-resolve...');
-  await run(`${wgksuCmd} reresolve-dns`);
+  await run(`${wgksuCmd} reresolve-dns ${currentIface}`);
   const log = await run(`tail -20 ${WG_DATA}/reresolve.log 2>/dev/null`);
   document.getElementById('reresolveLog').textContent = log.stdout.trim() || 'No changes detected';
   toast('Re-resolve complete');
@@ -494,7 +494,7 @@ window.triggerReresolve = async function() {
 window.saveReresolve = async function() {
   const enabled = document.getElementById('reresolveToggle').checked ? '1' : '0';
   const interval = document.getElementById('reresolveInterval').value || '120';
-  const r = await run(`cat > ${WG_DATA}/reresolve << 'WGRR'\nRERESOLVE_ENABLED=${enabled}\nRERESOLVE_INTERVAL=${interval}\nWGRR`);
+  const r = await run(`cat > ${WG_DATA}/reresolve.${currentIface} << 'WGRR'\nRERESOLVE_ENABLED=${enabled}\nRERESOLVE_INTERVAL=${interval}\nWGRR`);
   if (r.errno === 0) {
     document.getElementById('reresolveStatus').textContent = enabled === '1' ? `Enabled (${interval}s)` : 'Disabled';
     toast('Re-resolve settings saved');
@@ -510,7 +510,7 @@ window.clearReresolveLog = async function() {
 };
 
 async function refreshReresolve() {
-  const cfg = await run(`sh -c 'RERESOLVE_ENABLED=1; RERESOLVE_INTERVAL=120; [ -f ${WG_DATA}/reresolve ] && . ${WG_DATA}/reresolve; echo "$RERESOLVE_ENABLED $RERESOLVE_INTERVAL"'`);
+  const cfg = await run(`sh -c 'RERESOLVE_ENABLED=1; RERESOLVE_INTERVAL=120; [ -f ${WG_DATA}/reresolve.${currentIface} ] && . ${WG_DATA}/reresolve.${currentIface}; echo "$RERESOLVE_ENABLED $RERESOLVE_INTERVAL"'`);
   const parts = cfg.stdout.trim().split(' ');
   const enabled = (parts[0] || '1') !== '0';
   const interval = parts[1] || '120';
