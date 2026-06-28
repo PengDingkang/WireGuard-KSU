@@ -224,9 +224,8 @@ add_endpoint_route() {
     return
   fi
 
-  set -- $route
-  via="$2"
-  dev="$3"
+  via=$(echo "$route" | awk '{print $2}')
+  dev=$(echo "$route" | awk '{print $3}')
   if [ "$family" = "6" ]; then
     prefix=128
   else
@@ -687,7 +686,7 @@ case "$1" in
         ;;
       *)
         echo "Usage: wgksu stay-awake {enable|disable|status} [interface]"
-        return 1 2>/dev/null || exit 1
+        exit 1
         ;;
     esac
     ;;
