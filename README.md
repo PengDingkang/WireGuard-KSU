@@ -26,6 +26,7 @@
 - 兼容标准 wg-quick 配置格式
 - 开机自动启动所有配置的接口
 - KSU 模块列表显示运行状态和 IP
+- Endpoint 自动钉扎到底层物理网络，避免外层 WireGuard UDP 流量被其他 VPN/TUN 路由接管
 
 ## 前提条件
 
@@ -78,6 +79,12 @@ PersistentKeepalive = 25
 ```
 
 支持多个配置文件（`wg0.conf`、`wg1.conf` 等），每个文件对应一个接口。
+
+### Endpoint 路由钉扎
+
+模块启动接口时会为 Peer `Endpoint` 添加更具体的 host route，让 WireGuard 外层 UDP 流量走物理网络（优先 `wlan`，其次 `eth`，再其次移动网络），避免设备上同时存在其他 Android VPN/TUN 时把 WireGuard endpoint 套进另一个隧道。
+
+如果网络在息屏后被系统重建，模块会在 DNS re-resolve 循环中重新钉扎 endpoint route。该循环不是事件驱动，默认间隔为 120 秒，因此极端情况下恢复可能有最多约 120 秒延迟。可在 WebUI 的 DNS re-resolve 设置中调低间隔，但更短间隔会增加息屏唤醒和 DNS 查询频率。
 
 ### 生成密钥对
 

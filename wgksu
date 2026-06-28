@@ -49,6 +49,182 @@ wg_log() {
   printf '%s [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "$2" >> "$log_file"
 }
 
+endpoint_routes_file() {
+  echo "$wg_data/endpoint-routes.$1"
+}
+
+endpoint_host() {
+  endpoint="$1"
+  case "$endpoint" in
+    \[*\]*:*) host="${endpoint%%]*}"; echo "${host#[}" ;;
+    *) echo "${endpoint%:*}" ;;
+  esac
+}
+
+endpoint_port() {
+  echo "${1##*:}"
+}
+
+format_endpoint() {
+  addr="$1"
+  port="$2"
+  if is_ipv6 "$addr"; then
+    echo "[${addr}]:${port}"
+  else
+    echo "${addr}:${port}"
+  fi
+}
+
+is_ipv4() {
+  echo "$1" | awk -F. '
+    NF != 4 { exit 1 }
+    {
+      for (i = 1; i <= 4; i++) {
+        if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1
+      }
+      exit 0
+    }
+  '
+}
+
+is_ipv6() {
+  case "$1" in
+    *:*) echo "$1" | grep -Eq '^[0-9A-Fa-f:]+$' ;;
+    *) return 1 ;;
+  esac
+}
+
+route_table_dump() {
+  family="$1"
+  routes=$(ip "-$family" route show table all 2>/dev/null)
+  if [ -n "$routes" ]; then
+    echo "$routes"
+    return
+  fi
+
+  ip "-$family" route show 2>/dev/null
+  for table in wlan0 eth0 rmnet_data0 rmnet_data1 rmnet_data2 rmnet_data3 rmnet_data4 ccmni0 ccmni1; do
+    ip "-$family" route show table "$table" 2>/dev/null
+  done
+}
+
+get_underlay_default_route() {
+  family="$1"
+  route_table_dump "$family" | awk '
+    $1 == "default" {
+      dev = ""; via = "";
+      for (i = 1; i <= NF; i++) {
+        if ($i == "dev") dev = $(i + 1);
+        if ($i == "via") via = $(i + 1);
+      }
+      if (dev ~ /^(wlan|eth|rmnet|ccmni|usb|rndis)/) {
+        score = 50;
+        if (dev ~ /^wlan/) score = 10;
+        else if (dev ~ /^eth/) score = 20;
+        else if (dev ~ /^(rmnet|ccmni)/) score = 30;
+        if (via == "") via = "-";
+        print score, via, dev;
+      }
+    }
+  ' | sort -n | head -1
+}
+
+add_endpoint_route() {
+  family="$1"
+  iface="$2"
+  endpoint_addr="$3"
+  routes_tmp="$4"
+  [ -n "$endpoint_addr" ] || return
+
+  route=$(get_underlay_default_route "$family")
+  if [ -z "$route" ]; then
+    wg_log "$iface" "no IPv${family} physical default route available for endpoint $endpoint_addr"
+    return
+  fi
+
+  set -- $route
+  via="$2"
+  dev="$3"
+  if [ "$family" = "6" ]; then
+    prefix=128
+  else
+    prefix=32
+  fi
+
+  if [ "$via" = "-" ]; then
+    ip "-$family" route replace "$endpoint_addr/$prefix" dev "$dev" 2>>"$log_file" || return
+    wg_log "$iface" "endpoint IPv${family} route $endpoint_addr dev $dev"
+  else
+    ip "-$family" route replace "$endpoint_addr/$prefix" via "$via" dev "$dev" 2>>"$log_file" || return
+    wg_log "$iface" "endpoint IPv${family} route $endpoint_addr via $via dev $dev"
+  fi
+
+  grep -qx "$family $endpoint_addr" "$routes_tmp" 2>/dev/null || echo "$family $endpoint_addr" >> "$routes_tmp"
+}
+
+refresh_endpoint_routes() {
+  conf="$1"
+  iface="$2"
+  old_routes=$(endpoint_routes_file "$iface")
+  new_routes="${old_routes}.tmp"
+
+  mkdir -p "$wg_data"
+  : > "$new_routes"
+
+  grep -i '^[[:space:]]*Endpoint[[:space:]]*=' "$conf" | while IFS= read -r line; do
+    endpoint=$(echo "$line" | sed 's/^[^=]*= *//')
+    host=$(endpoint_host "$endpoint")
+    if is_ipv4 "$host"; then
+      add_endpoint_route 4 "$iface" "$host" "$new_routes"
+    elif is_ipv6 "$host"; then
+      add_endpoint_route 6 "$iface" "$host" "$new_routes"
+    else
+      endpoint_addr=$(resolve_host "$host")
+      if is_ipv4 "$endpoint_addr"; then
+        add_endpoint_route 4 "$iface" "$endpoint_addr" "$new_routes"
+      elif is_ipv6 "$endpoint_addr"; then
+        add_endpoint_route 6 "$iface" "$endpoint_addr" "$new_routes"
+      fi
+    fi
+  done
+
+  if [ -f "$old_routes" ]; then
+    while read -r old_family old_addr; do
+      [ -n "$old_family" ] || continue
+      if [ -z "$old_addr" ]; then
+        old_addr="$old_family"
+        old_family=4
+      fi
+      grep -qx "$old_family $old_addr" "$new_routes" 2>/dev/null && continue
+      if [ "$old_family" = "6" ]; then
+        ip -6 route del "$old_addr/128" 2>/dev/null
+      else
+        ip -4 route del "$old_addr/32" 2>/dev/null
+      fi
+    done < "$old_routes"
+  fi
+  mv "$new_routes" "$old_routes"
+}
+
+remove_endpoint_routes() {
+  iface="$1"
+  routes_file=$(endpoint_routes_file "$iface")
+  [ -f "$routes_file" ] || return
+  while read -r family endpoint_addr; do
+    [ -n "$family" ] || continue
+    if [ -z "$endpoint_addr" ]; then
+      endpoint_addr="$family"
+      family=4
+    fi
+    if [ "$family" = "6" ]; then
+      ip -6 route del "$endpoint_addr/128" 2>/dev/null
+    else
+      ip -4 route del "$endpoint_addr/32" 2>/dev/null
+    fi
+  done < "$routes_file"
+  rm -f "$routes_file"
+}
+
 # --- wg-quick replacement for Android (sh-based) ---
 
 # parse a .conf file and extract Interface/Peer sections
@@ -119,21 +295,21 @@ wg_up() {
     case "$line" in
       *[Ee]ndpoint*=*)
         ep=$(echo "$line" | sed 's/^[^=]*= *//')
-        host="${ep%:*}"; port="${ep##*:}"
-        case "$host" in
-          *[0-9].[0-9]*) ;;  # already IP
-          *)
-            resolved=$(resolve_host "$host")
-            if [ -n "$resolved" ]; then
-              line="Endpoint = ${resolved}:${port}"
-            fi
-            ;;
-        esac
+        host=$(endpoint_host "$ep")
+        port=$(endpoint_port "$ep")
+        if ! is_ipv4 "$host" && ! is_ipv6 "$host"; then
+          resolved=$(resolve_host "$host")
+          if [ -n "$resolved" ]; then
+            line="Endpoint = $(format_endpoint "$resolved" "$port")"
+          fi
+        fi
         ;;
     esac
     printf '%s\n' "$line"
   done < "$tmpconf" > "${tmpconf}.resolved"
   mv "${tmpconf}.resolved" "$tmpconf"
+
+  refresh_endpoint_routes "$tmpconf" "$iface"
 
   $WG setconf "$iface" "$tmpconf" 2>>"$log_file"
   wg_setconf_ret=$?
@@ -201,6 +377,7 @@ wg_down() {
 
   ip link set "$iface" down 2>/dev/null
   ip link del "$iface" 2>/dev/null
+  remove_endpoint_routes "$iface"
   ip rule del from all lookup main pref 1 2>/dev/null
 
   echo "$iface down"
@@ -297,17 +474,33 @@ show_status() {
 
 # --- DNS re-resolve for domain endpoints ---
 # resolve hostname to IP using available Android tools
+resolve_host4() {
+  host="$1"
+  addr=$(ping -c1 -W2 "$host" 2>/dev/null | grep -oE '\([0-9]+(\.[0-9]+){3}\)' | head -1 | tr -d '()')
+  [ -n "$addr" ] && echo "$addr" && return
+  addr=$(getent hosts "$host" 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+(\.[0-9]+){3}$/) { print $i; exit } }')
+  [ -n "$addr" ] && echo "$addr" && return
+  addr=$($busybox nslookup "$host" 2>/dev/null | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | tail -1)
+  [ -n "$addr" ] && echo "$addr"
+}
+
+resolve_host6() {
+  host="$1"
+  if command -v ping6 >/dev/null 2>&1; then
+    addr=$(ping6 -c1 -W2 "$host" 2>/dev/null | grep -oE '([0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:]+' | head -1)
+    [ -n "$addr" ] && echo "$addr" && return
+  fi
+  addr=$(getent hosts "$host" 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-Fa-f:]*:[0-9A-Fa-f:]*$/) { print $i; exit } }')
+  [ -n "$addr" ] && echo "$addr" && return
+  addr=$($busybox nslookup "$host" 2>/dev/null | grep -oE '([0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:]+' | tail -1)
+  [ -n "$addr" ] && echo "$addr"
+}
+
 resolve_host() {
   host="$1"
-  # try ping first (most reliable on Android)
-  ip=$(ping -c1 -W2 "$host" 2>/dev/null | head -1 | grep -oE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)' | tr -d '()')
-  [ -n "$ip" ] && echo "$ip" && return
-  # try getent
-  ip=$(getent hosts "$host" 2>/dev/null | awk '{print $1; exit}')
-  [ -n "$ip" ] && echo "$ip" && return
-  # try busybox nslookup
-  ip=$($busybox nslookup "$host" 2>/dev/null | awk '/^Address/&&NR>2{gsub(/#.*/,"",$2);print $2;exit}')
-  [ -n "$ip" ] && echo "$ip"
+  addr=$(resolve_host4 "$host")
+  [ -n "$addr" ] && echo "$addr" && return
+  resolve_host6 "$host"
 }
 
 # re-resolve domain endpoints for running interfaces, update if IP changed
@@ -318,6 +511,7 @@ reresolve_dns() {
     iface=$(basename "$conf" .conf)
     [ -n "$filter" ] && [ "$filter" != "$iface" ] && continue
     iface_running "$iface" || continue
+    refresh_endpoint_routes "$conf" "$iface"
 
     # parse each peer's public key and endpoint from conf
     awk '
@@ -329,21 +523,20 @@ reresolve_dns() {
       END { if(peer && pk && ep) print pk " " ep }
     ' "$conf" | while read -r pubkey endpoint; do
       # split host:port — skip if endpoint is already a raw IP
-      host="${endpoint%:*}"
-      port="${endpoint##*:}"
-      case "$host" in
-        *[0-9].[0-9]*) continue ;;  # looks like an IP, skip
-      esac
+      host=$(endpoint_host "$endpoint")
+      port=$(endpoint_port "$endpoint")
+      is_ipv4 "$host" && continue
+      is_ipv6 "$host" && continue
 
       new_ip=$(resolve_host "$host")
       [ -z "$new_ip" ] && continue
 
       # get current endpoint IP from wg show
       cur=$($WG show "$iface" endpoints 2>/dev/null | grep "^${pubkey}" | awk '{print $2}')
-      cur_ip="${cur%:*}"
+      cur_ip=$(endpoint_host "$cur")
 
       if [ "$new_ip" != "$cur_ip" ]; then
-        $WG set "$iface" peer "$pubkey" endpoint "${new_ip}:${port}" 2>>"$log_file"
+        $WG set "$iface" peer "$pubkey" endpoint "$(format_endpoint "$new_ip" "$port")" 2>>"$log_file"
         echo "[reresolve] $iface: $host changed $cur_ip -> $new_ip"
         echo "$(date '+%Y-%m-%d %H:%M:%S') $iface: $host $cur_ip -> $new_ip" >> "$reresolve_log"
       fi
