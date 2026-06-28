@@ -85,6 +85,14 @@ h2 { font-size: 18px; margin-bottom: 12px; }
     <span id="autoStartStatus" style="font-size:13px;color:var(--dim)">Loading...</span>
   </div>
   <div class="toggle-hint">Controls whether WireGuard starts automatically after boot.</div>
+  <div class="row wrap" style="margin-top:10px">
+    <label class="toggle">
+      <input type="checkbox" id="stayAwakeToggle" onchange="saveStayAwake(this.checked)">
+      <span>Stay Awake</span>
+    </label>
+    <span id="stayAwakeStatus" style="font-size:13px;color:var(--dim)">Loading...</span>
+  </div>
+  <div class="toggle-hint">Keeps this interface reachable while the screen is off by holding a device-wide wakelock and Wi-Fi hi-perf mode. Increases battery use.</div>
   <div style="margin-top:12px">
     <button class="btn btn-clear" style="flex:none;padding:8px 16px;font-size:13px" onclick="genKey()">🔑 Generate Keypair</button>
     <div id="keyResult" style="display:none;margin-top:8px;background:#0d1117;border-radius:8px;padding:10px;font-size:12px;font-family:monospace">
@@ -329,6 +337,12 @@ async function refresh() {
   document.getElementById('autoStartToggle').checked = enabled;
   document.getElementById('autoStartStatus').textContent = enabled ? 'Enabled' : 'Disabled';
 
+  // stay awake (per-interface)
+  const sa = await run(`sh -c 'STAY_AWAKE=0; [ -f ${WG_DATA}/stayawake.${currentIface} ] && . ${WG_DATA}/stayawake.${currentIface}; echo \${STAY_AWAKE:-0}'`);
+  const stayAwake = sa.stdout.trim() === '1';
+  document.getElementById('stayAwakeToggle').checked = stayAwake;
+  document.getElementById('stayAwakeStatus').textContent = stayAwake ? 'Enabled' : 'Disabled';
+
   // log
   const log = await run(`tail -50 ${WG_DATA}/error.log 2>/dev/null`);
   document.getElementById('log').textContent = stripAnsi(log.stdout) || 'No errors';
@@ -409,6 +423,23 @@ window.saveAutoStart = async function(enabled) {
     toggle.checked = enabled;
     status.textContent = enabled ? 'Enabled' : 'Disabled';
     toast(enabled ? 'Boot auto start enabled' : 'Boot auto start disabled');
+  } else {
+    toggle.checked = !enabled;
+    status.textContent = (!enabled) ? 'Enabled' : 'Disabled';
+    toast('Save failed: ' + r.stderr, true);
+  }
+};
+
+window.saveStayAwake = async function(enabled) {
+  const toggle = document.getElementById('stayAwakeToggle');
+  const status = document.getElementById('stayAwakeStatus');
+  toggle.disabled = true; status.textContent = 'Saving...';
+  const r = await run(`${wgksuCmd} stay-awake ${enabled ? 'enable' : 'disable'} ${currentIface}`);
+  toggle.disabled = false;
+  if (r.errno === 0) {
+    toggle.checked = enabled;
+    status.textContent = enabled ? 'Enabled' : 'Disabled';
+    toast(enabled ? 'Stay Awake enabled' : 'Stay Awake disabled');
   } else {
     toggle.checked = !enabled;
     status.textContent = (!enabled) ? 'Enabled' : 'Disabled';

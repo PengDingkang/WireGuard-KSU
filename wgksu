@@ -2,8 +2,12 @@
 
 wg_data="/data/adb/wireguard"
 autostart_file="$wg_data/autostart"
+stay_awake_file="$wg_data/stayawake"
+stay_awake_wakelock_state="$wg_data/stayawake.wakelock"
+stay_awake_wifi_state="$wg_data/stayawake.wifi"
 log_file="$wg_data/error.log"
 reresolve_log="$wg_data/reresolve.log"
+wake_lock_name="wgksu_stay_awake"
 
 # resolve wg binary path: prefer PATH, fallback to data dir
 if command -v wg >/dev/null 2>&1; then
@@ -44,9 +48,87 @@ set_autostart() {
   fi
 }
 
+get_stay_awake() {
+  iface="$1"
+  if [ -n "$iface" ] && [ -f "$wg_data/stayawake.${iface}" ]; then
+    STAY_AWAKE=0
+    # shellcheck disable=SC1090
+    . "$wg_data/stayawake.${iface}"
+    echo "${STAY_AWAKE:-0}"
+  elif [ -f "$stay_awake_file" ]; then
+    STAY_AWAKE=0
+    # shellcheck disable=SC1090
+    . "$stay_awake_file"
+    echo "${STAY_AWAKE:-0}"
+  else
+    echo "0"
+  fi
+}
+
+set_stay_awake() {
+  mkdir -p "$wg_data"
+  if [ -n "$2" ]; then
+    printf "STAY_AWAKE=%s\n" "$1" > "$wg_data/stayawake.$2"
+  else
+    printf "STAY_AWAKE=%s\n" "$1" > "$stay_awake_file"
+  fi
+}
+
 # log with interface prefix
 wg_log() {
   printf '%s [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "$2" >> "$log_file"
+}
+
+any_stay_awake_running() {
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    iface=$(basename "$conf" .conf)
+    iface_running "$iface" || continue
+    [ "$(get_stay_awake "$iface")" = "1" ] && return 0
+  done
+  return 1
+}
+
+enable_stay_awake_runtime() {
+  mkdir -p "$wg_data"
+
+  if [ -w /sys/power/wake_lock ]; then
+    if echo "$wake_lock_name" > /sys/power/wake_lock 2>/dev/null; then
+      echo "1" > "$stay_awake_wakelock_state"
+    else
+      wg_log power "failed to acquire wakelock"
+    fi
+  else
+    wg_log power "/sys/power/wake_lock is not writable"
+  fi
+
+  if cmd wifi force-hi-perf-mode enabled >/dev/null 2>&1; then
+    echo "1" > "$stay_awake_wifi_state"
+  else
+    wg_log power "failed to enable Wi-Fi hi-perf mode"
+  fi
+}
+
+release_stay_awake_runtime() {
+  if [ -f "$stay_awake_wakelock_state" ]; then
+    if [ -w /sys/power/wake_unlock ]; then
+      echo "$wake_lock_name" > /sys/power/wake_unlock 2>/dev/null
+    fi
+    rm -f "$stay_awake_wakelock_state"
+  fi
+
+  if [ -f "$stay_awake_wifi_state" ]; then
+    cmd wifi force-hi-perf-mode disabled >/dev/null 2>&1
+    rm -f "$stay_awake_wifi_state"
+  fi
+}
+
+apply_stay_awake_runtime() {
+  if any_stay_awake_running; then
+    enable_stay_awake_runtime
+  else
+    release_stay_awake_runtime
+  fi
 }
 
 endpoint_routes_file() {
@@ -468,6 +550,11 @@ show_status() {
     else
       printf "● %s boot auto start: disabled\n" "$iface"
     fi
+    if [ "$(get_stay_awake "$iface")" = "1" ]; then
+      printf "● %s stay awake: enabled\n" "$iface"
+    else
+      printf "● %s stay awake: disabled\n" "$iface"
+    fi
   done
   update_desc
 }
@@ -551,6 +638,7 @@ case "$1" in
     else
       start_all
     fi
+    apply_stay_awake_runtime
     update_desc
     ;;
   stop)
@@ -559,6 +647,7 @@ case "$1" in
     else
       stop_all
     fi
+    apply_stay_awake_runtime
     update_desc
     ;;
   restart)
@@ -567,11 +656,44 @@ case "$1" in
     else
       stop_all; start_all
     fi
+    apply_stay_awake_runtime
     update_desc
     ;;
   status)  show_status ;;
   enable)  set_autostart 1 "$2"; echo "boot auto start: enabled${2:+ ($2)}" ;;
   disable) set_autostart 0 "$2"; echo "boot auto start: disabled${2:+ ($2)}" ;;
+  stay-awake)
+    case "$2" in
+      enable|on|1|true)
+        set_stay_awake 1 "$3"
+        echo "stay awake: enabled${3:+ ($3)}"
+        apply_stay_awake_runtime
+        ;;
+      disable|off|0|false)
+        set_stay_awake 0 "$3"
+        echo "stay awake: disabled${3:+ ($3)}"
+        apply_stay_awake_runtime
+        ;;
+      status|"")
+        if [ -n "$3" ]; then
+          echo "stay awake ${3}: $(get_stay_awake "$3")"
+        else
+          for conf in "$wg_data"/*.conf; do
+            [ -f "$conf" ] || continue
+            iface=$(basename "$conf" .conf)
+            echo "stay awake ${iface}: $(get_stay_awake "$iface")"
+          done
+        fi
+        ;;
+      *)
+        echo "Usage: wgksu stay-awake {enable|disable|status} [interface]"
+        return 1 2>/dev/null || exit 1
+        ;;
+    esac
+    ;;
+  apply-stay-awake)
+    apply_stay_awake_runtime
+    ;;
   genkey)
     privkey=$($WG genkey)
     pubkey=$(echo "$privkey" | $WG pubkey)
@@ -584,5 +706,5 @@ case "$1" in
   reresolve-log)
     tail -50 "$reresolve_log" 2>/dev/null || echo "No re-resolve log"
     ;;
-  *)       echo "Usage: wgksu {start|stop|restart|status|enable|disable|genkey|reresolve-dns} [interface]" ;;
+  *)       echo "Usage: wgksu {start|stop|restart|status|enable|disable|stay-awake|genkey|reresolve-dns} [interface]" ;;
 esac

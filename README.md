@@ -27,6 +27,7 @@
 - 开机自动启动所有配置的接口
 - KSU 模块列表显示运行状态和 IP
 - Endpoint 自动钉扎到底层物理网络，避免外层 WireGuard UDP 流量被其他 VPN/TUN 路由接管
+- 可选 Stay Awake 模式，在息屏时保持 WireGuard 可达（会增加耗电）
 
 ## 前提条件
 
@@ -55,6 +56,8 @@ wgksu stop wg0            # 停止指定接口
 wgksu status              # 查看所有接口状态
 wgksu enable              # 开启开机自启
 wgksu disable             # 关闭开机自启
+wgksu stay-awake enable wg0   # 让 wg0 运行时持有 wakelock 并启用 Wi-Fi hi-perf
+wgksu stay-awake disable wg0  # 关闭 wg0 的 Stay Awake
 wgksu genkey              # 生成新的密钥对
 ```
 
@@ -85,6 +88,22 @@ PersistentKeepalive = 25
 模块启动接口时会为 Peer `Endpoint` 添加更具体的 host route，让 WireGuard 外层 UDP 流量走物理网络（优先 `wlan`，其次 `eth`，再其次移动网络），避免设备上同时存在其他 Android VPN/TUN 时把 WireGuard endpoint 套进另一个隧道。
 
 如果网络在息屏后被系统重建，模块会在 DNS re-resolve 循环中重新钉扎 endpoint route。该循环不是事件驱动，默认间隔为 120 秒，因此极端情况下恢复可能有最多约 120 秒延迟。可在 WebUI 的 DNS re-resolve 设置中调低间隔，但更短间隔会增加息屏唤醒和 DNS 查询频率。
+
+### 息屏保持可达
+
+内核态 WireGuard 没有 Android `VpnService` 前台服务。部分设备会在息屏后让 Wi-Fi/CPU 进入低功耗，导致外部无法主动连接隧道地址，即使 `PersistentKeepalive` 已配置也可能立即不可达。
+
+需要息屏仍可从外部连入时，可为接口开启 Stay Awake：
+
+```bash
+wgksu stay-awake enable wg0
+```
+
+开启后，如果对应接口正在运行会立即生效；如果接口尚未运行，则下次启动该接口时生效。模块会写入 `/sys/power/wake_lock` 并执行 `cmd wifi force-hi-perf-mode enabled`。停止接口或关闭 Stay Awake 后会释放 wakelock，并关闭模块启用过的 Wi-Fi hi-perf。
+
+`cmd wifi force-hi-perf-mode` 需要 Android 10+。Android 9 上该命令可能不可用，此时会记录失败日志，但 wakelock 仍会尝试生效。
+
+该模式会阻止设备正常深睡，明显增加耗电。建议只在开发、远程维护或固定供电设备上开启。
 
 ### 生成密钥对
 
