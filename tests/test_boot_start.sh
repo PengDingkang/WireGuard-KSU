@@ -34,7 +34,7 @@ WGKSU_TEST_COUNT_FILE="$count_file"
 export WGKSU WGKSU_TEST_COUNT_FILE wg_data
 
 # Called indirectly by start_iface_when_ready from the sourced boot script.
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329
 boot_network_ready() {
   return 0
 }
@@ -55,7 +55,7 @@ echo "late network readiness preserves the startup retry budget"
 rm -f "$count_file" "$log_file"
 network_checks=0
 # Called indirectly by start_iface_when_ready from the sourced boot script.
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329
 boot_network_ready() {
   network_checks=$((network_checks + 1))
   [ "$network_checks" -ge 60 ]
