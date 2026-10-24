@@ -22,10 +22,13 @@ fi
 
 # detect environment
 if [ "$KSU" = true ]; then
+  root_framework=kernelsu
   ui_print "- KernelSU version: $KSU_VER ($KSU_VER_CODE)"
 elif [ "$APATCH" = true ]; then
+  root_framework=apatch
   ui_print "- APatch detected"
 else
+  root_framework=magisk
   ui_print "- Magisk version: $MAGISK_VER ($MAGISK_VER_CODE)"
 fi
 
@@ -49,6 +52,7 @@ if [ ! -d "$wg_data" ]; then
   mkdir -p "$wg_data"
   set_perm "$wg_data" 0 0 0700
 fi
+printf '%s\n' "$root_framework" > "$wg_data/root_framework" || abort "! Cannot save root framework"
 
 # generate initial config with keypair if no configs exist
 if ! ls "$wg_data"/wg*.conf >/dev/null 2>&1; then
@@ -100,6 +104,27 @@ set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm "$MODPATH/system/bin/wg" 0 0 0755
 set_perm "$MODPATH/system/bin/wgksu" 0 0 0755
 
+# Mountless by default; preserve only an explicitly saved enabled choice.
+mount_enabled=0
+if [ -f "$wg_data/mount_enabled" ]; then
+  [ "$(cat "$wg_data/mount_enabled")" = 1 ] && mount_enabled=1
+  ui_print "- Preserving saved shell command mount choice"
+else
+  ui_print "- New installs and legacy upgrades default to NO shell command mount"
+  ui_print "- After reboot, use full command paths; update scripts using wg / wgksu"
+fi
+printf '%s\n' "$mount_enabled" > "$wg_data/mount_enabled" || abort "! Cannot save mount setting"
+if [ "$mount_enabled" = 0 ]; then
+  touch "$MODPATH/skip_mount" || abort "! Cannot disable command mount"
+  ui_print "- Shell command mount: disabled"
+else
+  ui_print "- Shell command mount: enabled"
+fi
+if [ "$(sh "$wg_data/wgksu" mount supported)" != 1 ]; then
+  ui_print "- Shell command mount unavailable: no enabled mounting metamodule"
+fi
+
 ui_print "- Installation complete, reboot your device"
 ui_print "- Config dir: /data/adb/wireguard/"
-ui_print "- Manage: wgksu {start|stop|restart|status}"
+ui_print "- Manage: /data/adb/wireguard/wgksu {start|stop|restart|status}"
+ui_print "- Change shell command mount in WebUI (requires reboot)"

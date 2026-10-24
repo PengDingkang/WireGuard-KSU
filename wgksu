@@ -1,20 +1,18 @@
 #!/system/bin/sh
 
 wg_data="/data/adb/wireguard"
+wg_module="/data/adb/modules/WireGuard-KSU"
 autostart_file="$wg_data/autostart"
 stay_awake_file="$wg_data/stayawake"
 stay_awake_wakelock_state="$wg_data/stayawake.wakelock"
 stay_awake_wifi_state="$wg_data/stayawake.wifi"
+# Historical filename retained for existing logs and running boot workers.
 log_file="$wg_data/error.log"
 reresolve_log="$wg_data/reresolve.log"
 wake_lock_name="wgksu_stay_awake"
 
-# resolve wg binary path: prefer PATH, fallback to data dir
-if command -v wg >/dev/null 2>&1; then
-  WG=wg
-else
-  WG="$wg_data/wg"
-fi
+# Internal calls must work independently of the optional system command mount.
+WG="$wg_data/wg"
 
 # find busybox across Magisk/KSU/APatch
 for bb in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox; do
@@ -30,6 +28,78 @@ else
     *) wgksu_self=$(command -v "$0" 2>/dev/null || echo "$0") ;;
   esac
 fi
+
+get_command_mount() {
+  if [ -f "$wg_module/skip_mount" ]; then
+    echo 0
+  else
+    echo 1
+  fi
+}
+
+is_mounting_metamodule() {
+  [ -f "$1/module.prop" ] && [ -f "$1/metamount.sh" ] || return 1
+  [ ! -e "$1/disable" ] && [ ! -e "$1/remove" ] || return 1
+  awk -F= '
+    { key = $1; value = $2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", key); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value) }
+    key == "metamodule" && (value == "1" || tolower(value) == "true") { found = 1 }
+    END { exit found ? 0 : 1 }
+  ' "$1/module.prop"
+}
+
+command_mount_supported() {
+  # The installer records the framework so WebUI/terminal environments need
+  # not export KSU or APATCH. Magisk and APatch provide their own mounting.
+  case "$(cat "$wg_data/root_framework" 2>/dev/null)" in
+    magisk|apatch) return 0 ;;
+  esac
+
+  mount_modules="${wg_module%/*}"
+  mount_meta="${mount_modules%/*}/metamodule"
+  # Prefer KernelSU's selected provider; a disabled provider is unavailable.
+  if [ -d "$mount_meta" ]; then
+    is_mounting_metamodule "$mount_meta"
+    return $?
+  fi
+  for mount_provider in "$mount_modules"/*; do
+    is_mounting_metamodule "$mount_provider" && return 0
+  done
+  return 1
+}
+
+set_command_mount() {
+  mount_enabled="$1"
+  if [ ! -d "$wg_module" ]; then
+    echo "ERROR: WireGuard module directory not found" >&2
+    return 1
+  fi
+  if [ "$mount_enabled" = 1 ] && ! command_mount_supported; then
+    echo "ERROR: No mount provider available; KernelSU requires an enabled mounting metamodule" >&2
+    return 1
+  fi
+  mkdir -p "$wg_data" || return 1
+  mount_previous=$(get_command_mount)
+  mount_tmp=$(mktemp "$wg_data/.mount_enabled.XXXXXX") || return 1
+  if ! printf '%s\n' "$mount_enabled" > "$mount_tmp"; then
+    rm -f "$mount_tmp"
+    return 1
+  fi
+  if [ "$mount_enabled" = 1 ]; then
+    rm -f "$wg_module/skip_mount" || { rm -f "$mount_tmp"; return 1; }
+  else
+    touch "$wg_module/skip_mount" || { rm -f "$mount_tmp"; return 1; }
+  fi
+  if ! mv -f "$mount_tmp" "$wg_data/mount_enabled"; then
+    if [ "$mount_previous" = 1 ]; then
+      rm -f "$wg_module/skip_mount"
+    else
+      touch "$wg_module/skip_mount"
+    fi
+    rm -f "$mount_tmp"
+    return 1
+  fi
+  echo "Shell command mount saved; reboot to apply"
+}
 
 get_autostart() {
   iface="$1"
@@ -666,10 +736,9 @@ wg_up() {
   mtu=$(grep -i '^[[:space:]]*MTU' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
 
   # create interface
-  if ! ip link add "$iface" type wireguard 2>"$log_file"; then
+  if ! ip link add "$iface" type wireguard 2>>"$log_file"; then
     wg_log "$iface" "failed to create WireGuard interface (kernel support missing?)"
     echo "ERROR: failed to create WireGuard interface (kernel support missing?)"
-    cat "$log_file" 2>/dev/null
     return 1
   fi
 
@@ -989,6 +1058,15 @@ reresolve_dns() {
 }
 
 case "$1" in
+  mount)
+    case "$2" in
+      enable) set_command_mount 1 ;;
+      disable) set_command_mount 0 ;;
+      status|"") get_command_mount ;;
+      supported) if command_mount_supported; then echo 1; else echo 0; fi ;;
+      *) echo "Usage: wgksu mount {enable|disable|status|supported}" >&2; exit 1 ;;
+    esac
+    ;;
   endpoint-route-lock-holder)
     endpoint_routes_lock_holder "$2" "$3" "$4" "$5" "$6" "$7" "$8"
     ;;
@@ -1078,5 +1156,5 @@ case "$1" in
   reresolve-log)
     tail -50 "$reresolve_log" 2>/dev/null || echo "No re-resolve log"
     ;;
-  *)       echo "Usage: wgksu {start|stop|restart|status|enable|disable|stay-awake|genkey|reresolve-dns|repair-routes} [interface]" ;;
+  *)       echo "Usage: wgksu {start|stop|restart|status|enable|disable|stay-awake|genkey|reresolve-dns|repair-routes} [interface]; wgksu mount {enable|disable|status|supported}" ;;
 esac

@@ -1,3 +1,22 @@
+# WireGuard KSU v1.2.0
+
+## Upgrade notice
+
+**Upgrade notice: shell command mounting now defaults to OFF.** Fresh installs and upgrades from versions without a saved mount preference will no longer mount `wg` / `wgksu` into `/system/bin` after reboot, even if the old version did so automatically. Previously saved choices are preserved.
+
+- Run `/data/adb/wireguard/wgksu` and `/data/adb/wireguard/wg` from a root shell, and update any scripts that relied on the short command names.
+- To restore short commands, enable **Shell Command Mount** in WebUI and reboot. KernelSU requires an enabled mounting metamodule; the option is disabled if none is available.
+- WireGuard tunnels, WebUI, boot autostart and existing tunnel configurations remain available without command mounting or a mounting metamodule.
+
+## Changes
+
+- Add a module-wide **Shell Command Mount** switch in WebUI and the `wgksu mount {enable|disable|status|supported}` commands; changes take effect after reboot.
+- Default to no command mount, preserve saved choices across upgrades, and use data-directory tools for WebUI, boot autostart and internal calls.
+- Detect mounting metamodules by their standard declaration and mount script. On KernelSU, disable the switch and reject CLI enable requests when the provider is absent, disabled or marked for removal. Magisk and APatch use their built-in mounting support.
+- Rename **Error Log** to **Runtime Log**, update empty and clear messages, and explain that normal startup and route events are included. Keep the existing `error.log` path and the separate DNS re-resolve log.
+- Append interface-creation errors without clearing earlier runtime log entries or replaying the log into itself during boot.
+- Update installation messages and root-shell command examples, document wg-quick compatibility limits, and include this release's changelog in the GitHub Release description.
+
 # WireGuard KSU v1.1.2
 
 - Recover stale endpoint-route locks after process termination or reboot

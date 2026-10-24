@@ -64,7 +64,7 @@ jobs:
           EOF
 
       - name: Update repository update.json
-        if: ${{ !github.event.inputs.prerelease }}
+        if: ${{ !inputs.prerelease }}
         run: |
           cp dist/update.json update.json
           git config user.name "github-actions[bot]"
@@ -73,11 +73,24 @@ jobs:
           git diff --cached --quiet || git commit -m "Update update.json for ${{ steps.meta.outputs.tag_name }}"
           git push origin HEAD:${{ github.ref_name }}
 
+      - name: Prepare release notes
+        run: |
+          awk '
+            /^# / {
+              if (in_section) exit
+              in_section = 1
+              next
+            }
+            in_section { print }
+          ' changelog.md > dist/release-notes.md
+          test -s dist/release-notes.md
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag_name }}
           name: ${{ steps.meta.outputs.release_name }}
-          prerelease: ${{ github.event.inputs.prerelease }}
+          prerelease: ${{ inputs.prerelease }}
           files: dist/${{ steps.meta.outputs.package_name }}
+          body_path: dist/release-notes.md
           generate_release_notes: true

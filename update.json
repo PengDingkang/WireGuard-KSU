@@ -1,6 +1,6 @@
 {
-  "version": "v1.1.1",
-  "versionCode": 10101,
-  "zipUrl": "https://github.com/PengDingkang/WireGuard-KSU/releases/download/v1.1.1/WireGuard-KSU-v1.1.1.zip",
+  "version": "v1.2.0",
+  "versionCode": 10200,
+  "zipUrl": "https://github.com/PengDingkang/WireGuard-KSU/releases/download/v1.2.0/WireGuard-KSU-v1.2.0.zip",
   "changelog": "https://raw.githubusercontent.com/PengDingkang/WireGuard-KSU/main/changelog.md"
 }

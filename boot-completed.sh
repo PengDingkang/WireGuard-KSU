@@ -2,19 +2,10 @@
 # WireGuard boot-completed script
 
 wg_data="/data/adb/wireguard"
+# Combined runtime log, including successful startup output and errors.
 log_file="$wg_data/error.log"
 
-resolve_wgksu_cmd() {
-  if command -v wgksu >/dev/null 2>&1; then
-    command -v wgksu
-  elif [ -x "$wg_data/wgksu" ]; then
-    echo "$wg_data/wgksu"
-  else
-    echo "wgksu"
-  fi
-}
-
-WGKSU=$(resolve_wgksu_cmd)
+WGKSU="$wg_data/wgksu"
 
 # find busybox across Magisk/KSU/APatch
 for bb in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox; do
