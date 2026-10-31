@@ -25,7 +25,7 @@ scripts/ci/verify-package.sh
 
 for script in $scripts; do
   sh -n "$script"
-  if [ "$script" = "customize.sh" ]; then
+  if [ "$script" = "customize.sh" ] || [ "$script" = "wgksu" ]; then
     shellcheck -x "$script"
   else
     shellcheck "$script"
