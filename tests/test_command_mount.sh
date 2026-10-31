@@ -18,6 +18,23 @@ fail() {
 }
 
 mkdir -p "$test_data" "$test_module" "$test_tmp/bin"
+cp -R "$repo_dir/translations" "$test_module/"
+cat > "$test_tmp/bin/settings" <<'EOF'
+#!/bin/sh
+[ "$3" = system_locales ] && printf '%s\n' "${WGKSU_TEST_SETTINGS_LOCALE:-en-US}"
+EOF
+cat > "$test_tmp/bin/getprop" <<'EOF'
+#!/bin/sh
+case "$1" in
+  persist.sys.locale) printf '%s\n' "${WGKSU_TEST_PERSIST_LOCALE:-}" ;;
+  ro.product.locale) printf '%s\n' "${WGKSU_TEST_PRODUCT_LOCALE:-}" ;;
+esac
+EOF
+cat > "$test_tmp/bin/cmd" <<'EOF'
+#!/bin/sh
+printf 'config: mcc310-mnc260-%s\n' "${WGKSU_TEST_CONFIG_LANGUAGE:-en-rUS}"
+EOF
+chmod 755 "$test_tmp/bin/settings" "$test_tmp/bin/getprop" "$test_tmp/bin/cmd"
 printf 'existing user config\n' > "$test_data/wg0.conf"
 cat > "$test_tmp/wg" <<'EOF'
 #!/bin/sh
@@ -46,11 +63,14 @@ install_module_fixture() {
   mkdir -p "$stage"
   cp "$test_tmp/wg" "$stage/wg"
   cp "$test_tmp/wgksu" "$stage/wgksu"
+  cp -R "$repo_dir/translations" "$stage/"
   cp "$repo_dir/wg0.conf.example" "$stage/wg0.conf.example"
+  : > "$test_tmp/install-ui.log"
   BOOTMODE=true KSU="$test_ksu" KSU_VER=test KSU_VER_CODE=30000 APATCH="$test_apatch" \
     API=36 MAGISK_VER=test MAGISK_VER_CODE=30000 \
-    MODPATH="$stage" sh -c '
-      ui_print() { :; }
+    MODPATH="$stage" WGKSU_TEST_UI_LOG="$test_tmp/install-ui.log" \
+    PATH="$test_tmp/bin:$PATH" sh -c '
+      ui_print() { printf "%s\n" "$*" >> "$WGKSU_TEST_UI_LOG"; }
       abort() { echo "$*" >&2; exit 1; }
       set_perm() { chmod "$4" "$1"; }
       set_perm_recursive() { :; }
@@ -63,6 +83,20 @@ install_module_fixture fresh
 [ "$(cat "$test_data/mount_enabled")" = 0 ] || fail "default setting is not disabled"
 [ "$(cat "$test_data/root_framework")" = magisk ] || fail "framework was not recorded"
 [ -x "$stage/system/bin/wg" ] || fail "optional mounted command is missing"
+grep -q 'Installation complete' "$test_tmp/install-ui.log" ||
+  fail "English installer messages were not loaded"
+
+WGKSU_TEST_SETTINGS_LOCALE=ru-RU,en-US install_module_fixture russian-language
+grep -q 'Установка завершена' "$test_tmp/install-ui.log" ||
+  fail "Russian installer messages were not loaded"
+
+WGKSU_TEST_SETTINGS_LOCALE=es-ES \
+  WGKSU_TEST_PERSIST_LOCALE= \
+  WGKSU_TEST_PRODUCT_LOCALE= \
+  WGKSU_TEST_CONFIG_LANGUAGE=fr-rFR \
+  install_module_fixture unsupported-language
+grep -q 'Installation complete' "$test_tmp/install-ui.log" ||
+  fail "unsupported installer locale did not fall back to English"
 
 sh "$test_data/wgksu" mount disable >/dev/null
 [ -f "$test_module/skip_mount" ] || fail "disable did not create skip_mount"
