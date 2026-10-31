@@ -25,7 +25,11 @@ scripts/ci/verify-package.sh
 
 for script in $scripts; do
   sh -n "$script"
-  shellcheck "$script"
+  if [ "$script" = "customize.sh" ]; then
+    shellcheck -x "$script"
+  else
+    shellcheck "$script"
+  fi
 done
 
 sh tests/test_endpoint_route_locks.sh
