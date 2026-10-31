@@ -1,3 +1,4 @@
+# shellcheck shell=sh disable=SC2034
 status_running="Running"
 status_stopped="Stopped"
 msg_error_module_dir_missing="ERROR: WireGuard module directory not found"
@@ -6,6 +7,7 @@ msg_mount_saved="Shell command mount saved; reboot to apply"
 msg_error_config_not_found="ERROR: config not found: "
 msg_error_interface_section_missing="ERROR: missing [Interface] section in "
 msg_error_private_key_missing="ERROR: missing PrivateKey in "
+msg_error_peer_section_missing="ERROR: missing [Peer] section in "
 msg_error_config_placeholders="ERROR: "
 msg_error_config_placeholders_suffix=" still has placeholder values, edit before starting"
 msg_error_interface_create="ERROR: failed to create WireGuard interface (kernel support missing?)"
