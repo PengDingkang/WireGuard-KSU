@@ -91,8 +91,8 @@ grep -q 'Установка завершена' "$test_tmp/install-ui.log" ||
   fail "Russian installer messages were not loaded"
 
 WGKSU_TEST_SETTINGS_LOCALE=es-ES \
-  WGKSU_TEST_PERSIST_LOCALE= \
-  WGKSU_TEST_PRODUCT_LOCALE= \
+  WGKSU_TEST_PERSIST_LOCALE='' \
+  WGKSU_TEST_PRODUCT_LOCALE='' \
   WGKSU_TEST_CONFIG_LANGUAGE=fr-rFR \
   install_module_fixture unsupported-language
 grep -q 'Installation complete' "$test_tmp/install-ui.log" ||
