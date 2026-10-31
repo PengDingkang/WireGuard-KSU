@@ -97,14 +97,14 @@ WGKSU_TEST_SETTINGS_LOCALE=es-ES \
   fail "persistent locale fallback was not selected"
 
 WGKSU_TEST_SETTINGS_LOCALE=es-ES \
-  WGKSU_TEST_PERSIST_LOCALE= \
-  WGKSU_TEST_PRODUCT_LOCALE= \
+  WGKSU_TEST_PERSIST_LOCALE='' \
+  WGKSU_TEST_PRODUCT_LOCALE='' \
   WGKSU_TEST_CONFIG_LANGUAGE=ru-rRU run_status
 [ "$(cat "$description_file")" = "⏹ Остановлен" ] ||
   fail "activity config locale fallback was not selected"
 
 WGKSU_TEST_SETTINGS_LOCALE=es-ES \
-  WGKSU_TEST_PERSIST_LOCALE= \
+  WGKSU_TEST_PERSIST_LOCALE='' \
   WGKSU_TEST_PRODUCT_LOCALE=fr-FR run_status
 [ "$(cat "$description_file")" = "⏹ Stopped" ] ||
   fail "unsupported locale did not fall back to English"
