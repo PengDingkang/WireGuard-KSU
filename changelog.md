@@ -1,3 +1,18 @@
+# WireGuard KSU v1.3.0
+
+## Changes
+
+- Added English and Russian translations for installer messages, wgksu CLI output, and the KernelSU module description.(@LegacyFreeman)
+- Added system-language detection with English fallback.(@LegacyFreeman)
+- Moved remaining WebUI status labels and relative-time and interval formats into the locale files.(@LegacyFreeman)
+- Fixed duplicate WebUI status-rendering code.(@LegacyFreeman)
+- Added English and Russian README versions with language-switch links.(@LegacyFreeman)
+- Updated packaging and verification scripts to include translation files.(@LegacyFreeman)
+- Added localization tests and expanded installer and CLI regression coverage.(@LegacyFreeman)
+- Pull request title(@LegacyFreeman)
+- Add English and Russian localization for installer, CLI, and WebUI(@LegacyFreeman)
+- etc.
+
 # WireGuard KSU v1.2.0
 
 ## Upgrade notice
