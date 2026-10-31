@@ -7,9 +7,12 @@ customize.sh
 boot-completed.sh
 uninstall.sh
 wgksu
+translations/en/strings.sh
+translations/ru/strings.sh
 tests/test_endpoint_route_locks.sh
 tests/test_boot_start.sh
 tests/test_command_mount.sh
+tests/test_localized_description.sh
 tests/helpers/busybox
 tests/helpers/busybox-no-flock
 tests/helpers/delayed-wgksu-holder
@@ -28,3 +31,4 @@ done
 sh tests/test_endpoint_route_locks.sh
 sh tests/test_boot_start.sh
 sh tests/test_command_mount.sh
+sh tests/test_localized_description.sh
