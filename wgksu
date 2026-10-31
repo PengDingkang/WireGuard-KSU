@@ -913,6 +913,8 @@ load_status_strings() {
   status_stopped="Stopped"
   status_strings="$wg_module/translations/$status_locale/strings.sh"
   if [ -f "$status_strings" ]; then
+    # shellcheck source=translations/en/strings.sh
+    # shellcheck disable=SC1090
     . "$status_strings"
   fi
   status_locale_loaded=1
