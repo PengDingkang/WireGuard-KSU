@@ -166,6 +166,7 @@ let translations = {};
 async function initLocalization() {
   const userLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
   const lang = userLang.startsWith('ru') ? 'ru' : 'en';
+  document.documentElement.lang = lang;
   
   try {
     const response = await fetch(`./locales/${lang}.json`);
@@ -285,10 +286,10 @@ function humanBytes(b) {
 function timeAgo(ts) {
   if (!ts || ts === '0') return t('neverLabel');
   const sec = Math.floor(Date.now()/1000) - parseInt(ts);
-  if (sec < 60) return sec + 's ago';
-  if (sec < 3600) return Math.floor(sec/60) + 'm ago';
-  if (sec < 86400) return Math.floor(sec/3600) + 'h ago';
-  return Math.floor(sec/86400) + 'd ago';
+  if (sec < 60) return t('secondsAgo', { value: sec });
+  if (sec < 3600) return t('minutesAgo', { value: Math.floor(sec/60) });
+  if (sec < 86400) return t('hoursAgo', { value: Math.floor(sec/3600) });
+  return t('daysAgo', { value: Math.floor(sec/86400) });
 }
 
 function parseWgShow(text) {
@@ -362,9 +363,9 @@ async function refresh() {
   const anyUp = await run(`${wgCmd} show interfaces 2>/dev/null`);
   const runningIfaces = anyUp.stdout.trim();
   if (runningIfaces) {
-    document.getElementById('statusBadge').innerHTML = `<span class="status-dot on"></span>Running (${runningIfaces.replace(/\n/g,', ')})`;
+    document.getElementById('statusBadge').innerHTML = `<span class="status-dot on"></span>${t('runningStatus')} (${runningIfaces.replace(/\n/g,', ')})`;
   } else {
-    document.getElementById('statusBadge').innerHTML = `<span class="status-dot off"></span>Stopped`;
+    document.getElementById('statusBadge').innerHTML = `<span class="status-dot off"></span>${t('stoppedStatus')}`;
   }
 
   if (isUp) {
@@ -608,7 +609,7 @@ window.saveReresolve = async function() {
   const interval = document.getElementById('reresolveInterval').value || '120';
   const r = await run(`cat > ${WG_DATA}/reresolve.${currentIface} << 'WGRR'\nRERESOLVE_ENABLED=${enabled}\nRERESOLVE_INTERVAL=${interval}\nWGRR`);
   if (r.errno === 0) {
-    document.getElementById('reresolveStatus').textContent = enabled === '1' ? `${t('enabledStatus')} (${interval}s)` : t('disabledStatus');
+    document.getElementById('reresolveStatus').textContent = enabled === '1' ? `${t('enabledStatus')} (${t('intervalValue', { value: interval })})` : t('disabledStatus');
     toast(t('reresolveSettingsSaved'));
   } else {
     toast(t('saveFailed') + r.stderr, true);
@@ -628,7 +629,7 @@ async function refreshReresolve() {
   const interval = parts[1] || '120';
   document.getElementById('reresolveToggle').checked = enabled;
   document.getElementById('reresolveInterval').value = interval;
-  document.getElementById('reresolveStatus').textContent = enabled ? `${t('enabledStatus')} (${interval}s)` : t('disabledStatus');
+  document.getElementById('reresolveStatus').textContent = enabled ? `${t('enabledStatus')} (${t('intervalValue', { value: interval })})` : t('disabledStatus');
   const log = await run(`tail -20 ${WG_DATA}/reresolve.log 2>/dev/null`);
   document.getElementById('reresolveLog').textContent = log.stdout.trim() || t('noLogEntries');
 }
