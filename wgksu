@@ -68,13 +68,14 @@ command_mount_supported() {
 }
 
 set_command_mount() {
+  load_status_strings
   mount_enabled="$1"
   if [ ! -d "$wg_module" ]; then
-    echo "ERROR: WireGuard module directory not found" >&2
+    echo "$msg_error_module_dir_missing" >&2
     return 1
   fi
   if [ "$mount_enabled" = 1 ] && ! command_mount_supported; then
-    echo "ERROR: No mount provider available; KernelSU requires an enabled mounting metamodule" >&2
+    echo "$msg_error_mount_provider_missing" >&2
     return 1
   fi
   mkdir -p "$wg_data" || return 1
@@ -98,7 +99,7 @@ set_command_mount() {
     rm -f "$mount_tmp"
     return 1
   fi
-  echo "Shell command mount saved; reboot to apply"
+  echo "$msg_mount_saved"
 }
 
 get_autostart() {
@@ -698,34 +699,35 @@ remove_endpoint_routes() {
 
 # parse a .conf file and extract Interface/Peer sections
 wg_up() {
+  load_status_strings
   conf="$1"
   iface="$2"
 
   if ip link show "$iface" >/dev/null 2>&1; then
-    echo "$iface is already up"
+    echo "$iface$msg_iface_already_up"
     return
   fi
 
   if [ ! -f "$conf" ]; then
-    echo "ERROR: config not found: $conf"
+    echo "$msg_error_config_not_found$conf"
     return 1
   fi
 
   # basic config validation
   if ! grep -qi '^[[:space:]]*\[Interface\]' "$conf"; then
-    echo "ERROR: missing [Interface] section in $conf"
+    echo "$msg_error_interface_section_missing$conf"
     return 1
   fi
   if ! grep -qi '^[[:space:]]*PrivateKey' "$conf"; then
-    echo "ERROR: missing PrivateKey in $conf"
+    echo "$msg_error_private_key_missing$conf"
     return 1
   fi
   if grep -q 'REPLACE_WITH_' "$conf"; then
-    echo "ERROR: $conf still has placeholder values, edit before starting"
+    echo "$msg_error_config_placeholders$conf$msg_error_config_placeholders_suffix"
     return 1
   fi
   if ! grep -qi '^[[:space:]]*\[Peer\]' "$conf"; then
-    echo "ERROR: missing [Peer] section in $conf"
+    echo "$msg_error_peer_section_missing$conf"
     return 1
   fi
   require_endpoint_routes_lock "$iface" || return 1
@@ -738,7 +740,7 @@ wg_up() {
   # create interface
   if ! ip link add "$iface" type wireguard 2>>"$log_file"; then
     wg_log "$iface" "failed to create WireGuard interface (kernel support missing?)"
-    echo "ERROR: failed to create WireGuard interface (kernel support missing?)"
+    echo "$msg_error_interface_create"
     return 1
   fi
 
@@ -783,7 +785,7 @@ wg_up() {
   if ! refresh_endpoint_routes "$tmpconf" "$iface"; then
     rm -f "$tmpconf"
     wg_log "$iface" "failed to prepare endpoint routes; interface startup aborted"
-    echo "ERROR: failed to prepare endpoint routes for $iface"
+    echo "$msg_error_endpoint_routes$iface"
     ip link del "$iface" 2>/dev/null
     return 1
   fi
@@ -794,7 +796,7 @@ wg_up() {
 
   if [ "$wg_setconf_ret" -ne 0 ]; then
     wg_log "$iface" "wg setconf failed"
-    echo "ERROR: wg setconf failed for $iface"
+    echo "$msg_error_wg_setconf$iface"
     ip link del "$iface" 2>/dev/null
     return 1
   fi
@@ -841,14 +843,15 @@ wg_up() {
   # routing policy
   ip rule add from all lookup main pref 1 2>/dev/null
 
-  echo "$iface up"
+  echo "$iface$msg_iface_up"
 }
 
 wg_down() {
+  load_status_strings
   iface="$1"
 
   if ! ip link show "$iface" >/dev/null 2>&1; then
-    echo "$iface is not up"
+    echo "$iface$msg_iface_not_up"
     return
   fi
 
@@ -857,7 +860,7 @@ wg_down() {
   remove_endpoint_routes "$iface"
   ip rule del from all lookup main pref 1 2>/dev/null
 
-  echo "$iface down"
+  echo "$iface$msg_iface_down"
 }
 
 # --- list available configs ---
@@ -881,9 +884,44 @@ any_running() {
   return 1
 }
 
+resolve_status_locale() {
+  locale_candidate=$(printf '%s' "$1" | cut -d',' -f1 | tr '_' '-')
+  locale_language=$(printf '%s' "$locale_candidate" | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
+  case "$locale_language" in
+    en|ru) status_locale="$locale_language"; return 0 ;;
+  esac
+  return 1
+}
+
+load_status_strings() {
+  [ "${status_locale_loaded:-0}" = 1 ] && return
+  status_locale=""
+  resolve_status_locale "$(settings get system system_locales 2>/dev/null)" ||
+    resolve_status_locale "$(getprop persist.sys.locale 2>/dev/null)" ||
+    resolve_status_locale "$(getprop ro.product.locale 2>/dev/null)" ||
+    resolve_status_locale "$(
+      cmd activity get-config 2>/dev/null |
+        grep -m1 '^config:' |
+        sed 's/^config:[[:space:]]*//' |
+        tr '-' '\n' |
+        grep -m1 -E '^[a-zA-Z]{2,3}$' ||
+        :
+    )" ||
+    status_locale="en"
+
+  status_running="Running"
+  status_stopped="Stopped"
+  status_strings="$wg_module/translations/$status_locale/strings.sh"
+  if [ -f "$status_strings" ]; then
+    . "$status_strings"
+  fi
+  status_locale_loaded=1
+}
+
 # --- update KSU description ---
 update_desc() {
   command -v ksud >/dev/null 2>&1 || return
+  load_status_strings
   export KSU_MODULE="WireGuard-KSU"
   if any_running; then
     desc=""
@@ -896,14 +934,15 @@ update_desc() {
         desc="${desc}${iface}: ${ip:-?}"
       fi
     done
-    ksud module config set override.description "✅ Running | ${desc}" 2>/dev/null
+    ksud module config set override.description "✅ ${status_running} | ${desc}" 2>/dev/null
   else
-    ksud module config set override.description "⏹ Stopped" 2>/dev/null
+    ksud module config set override.description "⏹ ${status_stopped}" 2>/dev/null
   fi
 }
 
 # --- commands ---
 start_all() {
+  load_status_strings
   started=0
   start_status=0
   for conf in "$wg_data"/*.conf; do
@@ -912,7 +951,7 @@ start_all() {
     wg_up "$conf" "$iface" || start_status=1
     started=1
   done
-  [ "$started" = "0" ] && echo "No .conf files found in $wg_data"
+  [ "$started" = "0" ] && echo "$msg_no_configs$wg_data"
   return "$start_status"
 }
 
@@ -925,32 +964,33 @@ stop_all() {
 }
 
 show_status() {
+  load_status_strings
   found=0
   for conf in "$wg_data"/*.conf; do
     [ -f "$conf" ] || continue
     iface=$(basename "$conf" .conf)
     found=1
     if iface_running "$iface"; then
-      printf "\033[32m● %s is up\033[0m\n" "$iface"
+      printf "\033[32m● %s%s\033[0m\n" "$iface" "$msg_iface_status_up"
       $WG show "$iface" 2>/dev/null | sed 's/^/  /'
     else
-      printf "\033[31m● %s is down\033[0m\n" "$iface"
+      printf "\033[31m● %s%s\033[0m\n" "$iface" "$msg_iface_status_down"
     fi
   done
-  [ "$found" = "0" ] && echo "No .conf files found in $wg_data"
+  [ "$found" = "0" ] && echo "$msg_no_configs$wg_data"
   echo ""
   for conf in "$wg_data"/*.conf; do
     [ -f "$conf" ] || continue
     iface=$(basename "$conf" .conf)
     if [ "$(get_autostart "$iface")" = "1" ]; then
-      printf "● %s boot auto start: enabled\n" "$iface"
+      printf "● %s %s: %s\n" "$iface" "$msg_boot_auto_start" "$msg_enabled"
     else
-      printf "● %s boot auto start: disabled\n" "$iface"
+      printf "● %s %s: %s\n" "$iface" "$msg_boot_auto_start" "$msg_disabled"
     fi
     if [ "$(get_stay_awake "$iface")" = "1" ]; then
-      printf "● %s stay awake: enabled\n" "$iface"
+      printf "● %s %s: %s\n" "$iface" "$msg_stay_awake" "$msg_enabled"
     else
-      printf "● %s stay awake: disabled\n" "$iface"
+      printf "● %s %s: %s\n" "$iface" "$msg_stay_awake" "$msg_disabled"
     fi
   done
   update_desc
@@ -1057,6 +1097,7 @@ reresolve_dns() {
   done
 }
 
+load_status_strings
 case "$1" in
   mount)
     case "$2" in
@@ -1064,7 +1105,7 @@ case "$1" in
       disable) set_command_mount 0 ;;
       status|"") get_command_mount ;;
       supported) if command_mount_supported; then echo 1; else echo 0; fi ;;
-      *) echo "Usage: wgksu mount {enable|disable|status|supported}" >&2; exit 1 ;;
+      *) echo "$msg_usage_mount" >&2; exit 1 ;;
     esac
     ;;
   endpoint-route-lock-holder)
@@ -1104,33 +1145,33 @@ case "$1" in
     exit "$command_status"
     ;;
   status)  show_status ;;
-  enable)  set_autostart 1 "$2"; echo "boot auto start: enabled${2:+ ($2)}" ;;
-  disable) set_autostart 0 "$2"; echo "boot auto start: disabled${2:+ ($2)}" ;;
+  enable)  set_autostart 1 "$2"; echo "$msg_boot_auto_start: $msg_enabled${2:+ ($2)}" ;;
+  disable) set_autostart 0 "$2"; echo "$msg_boot_auto_start: $msg_disabled${2:+ ($2)}" ;;
   stay-awake)
     case "$2" in
       enable|on|1|true)
         set_stay_awake 1 "$3"
-        echo "stay awake: enabled${3:+ ($3)}"
+        echo "$msg_stay_awake: $msg_enabled${3:+ ($3)}"
         apply_stay_awake_runtime
         ;;
       disable|off|0|false)
         set_stay_awake 0 "$3"
-        echo "stay awake: disabled${3:+ ($3)}"
+        echo "$msg_stay_awake: $msg_disabled${3:+ ($3)}"
         apply_stay_awake_runtime
         ;;
       status|"")
         if [ -n "$3" ]; then
-          echo "stay awake ${3}: $(get_stay_awake "$3")"
+          echo "$msg_stay_awake ${3}: $(get_stay_awake "$3")"
         else
           for conf in "$wg_data"/*.conf; do
             [ -f "$conf" ] || continue
             iface=$(basename "$conf" .conf)
-            echo "stay awake ${iface}: $(get_stay_awake "$iface")"
+            echo "$msg_stay_awake ${iface}: $(get_stay_awake "$iface")"
           done
         fi
         ;;
       *)
-        echo "Usage: wgksu stay-awake {enable|disable|status} [interface]"
+        echo "$msg_usage_stay_awake"
         exit 1
         ;;
     esac
@@ -1141,8 +1182,8 @@ case "$1" in
   genkey)
     privkey=$($WG genkey)
     pubkey=$(echo "$privkey" | $WG pubkey)
-    echo "Private Key: $privkey"
-    echo "Public Key:  $pubkey"
+    printf "%s %s\n" "$msg_private_key" "$privkey"
+    printf "%s  %s\n" "$msg_public_key" "$pubkey"
     ;;
   reresolve-dns)
     reresolve_dns "$2"
@@ -1154,7 +1195,7 @@ case "$1" in
     cleanup_boot_endpoint_routes_locks
     ;;
   reresolve-log)
-    tail -50 "$reresolve_log" 2>/dev/null || echo "No re-resolve log"
+    tail -50 "$reresolve_log" 2>/dev/null || echo "$msg_no_reresolve_log"
     ;;
-  *)       echo "Usage: wgksu {start|stop|restart|status|enable|disable|stay-awake|genkey|reresolve-dns|repair-routes} [interface]; wgksu mount {enable|disable|status|supported}" ;;
+  *)       echo "$msg_usage_wgksu" ;;
 esac
