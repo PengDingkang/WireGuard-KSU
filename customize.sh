@@ -32,6 +32,7 @@ fi
 if [ ! -f "$install_strings" ]; then
   abort "ERROR: installer translations are missing"
 fi
+# shellcheck source=translations/en/strings.sh
 # shellcheck disable=SC1090
 . "$install_strings"
 
