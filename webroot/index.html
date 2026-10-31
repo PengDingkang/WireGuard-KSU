@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -55,110 +55,316 @@ h2 { font-size: 18px; margin-bottom: 12px; }
 <div class="card">
   <div class="row">
     <h2>WireGuard</h2>
-    <span id="statusBadge"><span class="status-dot off"></span>Checking...</span>
+    <span id="statusBadge"><span class="status-dot off"></span><span data-i18n="checking">Checking...</span></span>
   </div>
   <div id="ifaceTabs"></div>
   <div id="ifaceInfo"></div>
   <div class="btn-group">
-    <button class="btn btn-start" onclick="control('start')">Start</button>
-    <button class="btn btn-stop" onclick="control('stop')">Stop</button>
-    <button class="btn btn-restart" onclick="control('restart')">Restart</button>
+    <button class="btn btn-start" onclick="control('start')" data-i18n="btnStart">Start</button>
+    <button class="btn btn-stop" onclick="control('stop')" data-i18n="btnStop">Stop</button>
+    <button class="btn btn-restart" onclick="control('restart')" data-i18n="btnRestart">Restart</button>
   </div>
 </div>
 
 <div class="card">
-  <h2>Peers</h2>
-  <div id="peers"><div style="color:var(--dim);padding:8px">Loading...</div></div>
+  <h2 data-i18n="peersTitle">Peers</h2>
+  <div id="peers"><div style="color:var(--dim);padding:8px" data-i18n="loading">Loading...</div></div>
 </div>
 
 <div class="card">
   <div class="row">
-    <h2>Config</h2>
-    <button class="btn btn-save" style="flex:none;padding:6px 16px" onclick="toggleEdit()" id="editBtn">Edit</button>
-    <button class="btn btn-clear" style="flex:none;padding:6px 16px;margin-left:4px" onclick="deleteConfig()" id="deleteBtn">Delete</button>
+    <h2 data-i18n="configTitle">Config</h2>
+    <button class="btn btn-save" style="flex:none;padding:6px 16px" onclick="toggleEdit()" id="editBtn" data-i18n="btnEdit">Edit</button>
+    <button class="btn btn-clear" style="flex:none;padding:6px 16px;margin-left:4px" onclick="deleteConfig()" id="deleteBtn" data-i18n="btnDelete">Delete</button>
   </div>
   <div class="row wrap">
     <label class="toggle">
       <input type="checkbox" id="autoStartToggle" onchange="saveAutoStart(this.checked)">
-      <span>Boot Auto Start</span>
+      <span data-i18n="bootAutoStart">Boot Auto Start</span>
     </label>
-    <span id="autoStartStatus" style="font-size:13px;color:var(--dim)">Loading...</span>
+    <span id="autoStartStatus" style="font-size:13px;color:var(--dim)" data-i18n="loading">Loading...</span>
   </div>
-  <div class="toggle-hint">Controls whether WireGuard starts automatically after boot.</div>
+  <div class="toggle-hint" data-i18n="bootAutoStartHint">Controls whether WireGuard starts automatically after boot.</div>
   <div class="row wrap" style="margin-top:10px">
     <label class="toggle">
       <input type="checkbox" id="stayAwakeToggle" onchange="saveStayAwake(this.checked)">
-      <span>Stay Awake</span>
+      <span data-i18n="stayAwake">Stay Awake</span>
     </label>
-    <span id="stayAwakeStatus" style="font-size:13px;color:var(--dim)">Loading...</span>
+    <span id="stayAwakeStatus" style="font-size:13px;color:var(--dim)" data-i18n="loading">Loading...</span>
   </div>
-  <div class="toggle-hint">Keeps this interface reachable while the screen is off by holding a device-wide wakelock and Wi-Fi hi-perf mode. Increases battery use.</div>
+  <div class="toggle-hint" data-i18n="stayAwakeHint">Keeps this interface reachable while the screen is off by holding a device-wide wakelock and Wi-Fi hi-perf mode. Increases battery use.</div>
   <div style="margin-top:12px">
-    <button class="btn btn-clear" style="flex:none;padding:8px 16px;font-size:13px" onclick="genKey()">🔑 Generate Keypair</button>
+    <button class="btn btn-clear" style="flex:none;padding:8px 16px;font-size:13px" onclick="genKey()" data-i18n="btnGenKey">🔑 Generate Keypair</button>
     <div id="keyResult" style="display:none;margin-top:8px;background:#0d1117;border-radius:8px;padding:10px;font-size:12px;font-family:monospace">
-      <div style="margin-bottom:6px"><span style="color:var(--dim)">Private Key:</span> <span id="keyPriv" style="user-select:all"></span></div>
-      <div><span style="color:var(--dim)">Public Key:</span> <span id="keyPub" style="user-select:all"></span></div>
+      <div style="margin-bottom:6px"><span style="color:var(--dim)" data-i18n="privateKey">Private Key:</span> <span id="keyPriv" style="user-select:all"></span></div>
+      <div><span style="color:var(--dim)" data-i18n="publicKey">Public Key:</span> <span id="keyPub" style="user-select:all"></span></div>
     </div>
   </div>
-  <div id="configView" class="log">Loading...</div>
+  <div id="configView" class="log" data-i18n="loading">Loading...</div>
   <textarea id="configEdit" class="editor" style="display:none"></textarea>
   <div id="configBtns" class="btn-group" style="display:none">
-    <button class="btn btn-save" onclick="saveConfig()">Save</button>
-    <button class="btn btn-restart" onclick="saveAndRestart()">Save & Restart</button>
-    <button class="btn btn-stop" onclick="cancelEdit()">Cancel</button>
+    <button class="btn btn-save" onclick="saveConfig()" data-i18n="btnSave">Save</button>
+    <button class="btn btn-restart" onclick="saveAndRestart()" data-i18n="btnSaveRestart">Save & Restart</button>
+    <button class="btn btn-stop" onclick="cancelEdit()" data-i18n="btnCancel">Cancel</button>
   </div>
 </div>
 
 <div class="card">
   <div class="row">
-    <h2>DNS Re-resolve</h2>
-    <button class="btn btn-start" style="flex:none;padding:6px 16px" onclick="triggerReresolve()">Run Now</button>
+    <h2 data-i18n="dnsTitle">DNS Re-resolve</h2>
+    <button class="btn btn-start" style="flex:none;padding:6px 16px" onclick="triggerReresolve()" data-i18n="btnRunNow">Run Now</button>
   </div>
   <div class="row wrap">
     <label class="toggle">
       <input type="checkbox" id="reresolveToggle" onchange="saveReresolve()">
-      <span>Auto Re-resolve</span>
+      <span data-i18n="autoReresolve">Auto Re-resolve</span>
     </label>
-    <span id="reresolveStatus" style="font-size:13px;color:var(--dim)">Loading...</span>
+    <span id="reresolveStatus" style="font-size:13px;color:var(--dim)" data-i18n="loading">Loading...</span>
   </div>
-  <div class="toggle-hint">Periodically re-resolve domain endpoints and update peers when IP changes. Requires reboot to take effect.</div>
+  <div class="toggle-hint" data-i18n="autoReresolveHint">Periodically re-resolve domain endpoints and update peers when IP changes. Requires reboot to take effect.</div>
   <div class="row" style="margin-top:10px;gap:8px">
-    <label style="font-size:13px;white-space:nowrap">Interval (sec)</label>
+    <label style="font-size:13px;white-space:nowrap" data-i18n="intervalSec">Interval (sec)</label>
     <input type="number" id="reresolveInterval" min="30" max="3600" value="120" style="width:80px;padding:6px 8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:var(--text);font-size:13px">
-    <button class="btn btn-save" style="flex:none;padding:6px 16px" onclick="saveReresolve()">Save</button>
+    <button class="btn btn-save" style="flex:none;padding:6px 16px" onclick="saveReresolve()" data-i18n="btnSave">Save</button>
   </div>
   <div class="row" style="margin-top:8px">
-    <span style="font-size:13px;color:var(--dim)">Re-resolve Log</span>
-    <button class="btn btn-clear" style="flex:none;padding:4px 12px;font-size:12px" onclick="clearReresolveLog()">Clear</button>
+    <span style="font-size:13px;color:var(--dim)" data-i18n="reresolveLog">Re-resolve Log</span>
+    <button class="btn btn-clear" style="flex:none;padding:4px 12px;font-size:12px" onclick="clearReresolveLog()" data-i18n="btnClear">Clear</button>
   </div>
-  <div id="reresolveLog" class="log" style="max-height:150px">Loading...</div>
+  <div id="reresolveLog" class="log" style="max-height:150px" data-i18n="loading">Loading...</div>
 </div>
 
 <div class="card">
   <div class="row">
-    <h2>Runtime Log</h2>
-    <button class="btn btn-clear" style="flex:none;padding:6px 16px" onclick="clearLog()">Clear</button>
+    <h2 data-i18n="runtimeLogTitle">Runtime Log</h2>
+    <button class="btn btn-clear" style="flex:none;padding:6px 16px" onclick="clearLog()" data-i18n="btnClear">Clear</button>
   </div>
-  <div class="toggle-hint">Recent startup, route maintenance, warning and error messages across all interfaces. Messages such as "wg0 up" indicate a successful startup.</div>
-  <div id="log" class="log">Loading...</div>
+  <div class="toggle-hint" data-i18n="runtimeLogHint">Recent startup, route maintenance, warning and error messages across all interfaces. Messages such as "wg0 up" indicate a successful startup.</div>
+  <div id="log" class="log" data-i18n="loading">Loading...</div>
 </div>
 
 <div class="card">
-  <h2>Shell Command Mount</h2>
+  <h2 data-i18n="cmdMountTitle">Shell Command Mount</h2>
   <div class="row wrap">
     <label class="toggle">
       <input type="checkbox" id="commandMountToggle" onchange="saveCommandMount(this.checked)" disabled>
-      <span>Mount wg / wgksu commands</span>
+      <span data-i18n="cmdMountToggleText">Mount wg / wgksu commands</span>
     </label>
-    <span id="commandMountStatus" style="font-size:13px;color:var(--dim)">Loading...</span>
+    <span id="commandMountStatus" style="font-size:13px;color:var(--dim)" data-i18n="loading">Loading...</span>
   </div>
-  <div class="toggle-hint" id="commandMountHint">Adds wg and wgksu to the system command path for terminals. Off by default; WireGuard and WebUI work with this off. Changes take effect after reboot.</div>
+  <div class="toggle-hint" id="commandMountHint" data-i18n="cmdMountHint">Adds wg and wgksu to the system command path for terminals. Off by default; WireGuard and WebUI work with this off. Changes take effect after reboot.</div>
 </div>
 
 <div id="toast" class="toast"></div>
 
 <script type="module">
 import { exec } from 'https://esm.sh/kernelsu';
+
+// --- ЛОКАЛИЗАЦИЯ (СИСТЕМА АВТООПРЕДЕЛЕНИЯ) ---
+const translations = {
+  en: {
+    checking: "Checking...",
+    btnStart: "Start",
+    btnStop: "Stop",
+    btnRestart: "Restart",
+    peersTitle: "Peers",
+    loading: "Loading...",
+    configTitle: "Config",
+    btnEdit: "Edit",
+    btnEditing: "Editing...",
+    btnDelete: "Delete",
+    bootAutoStart: "Boot Auto Start",
+    bootAutoStartHint: "Controls whether WireGuard starts automatically after boot.",
+    stayAwake: "Stay Awake",
+    stayAwakeHint: "Keeps this interface reachable while the screen is off by holding a device-wide wakelock and Wi-Fi hi-perf mode. Increases battery use.",
+    btnGenKey: "🔑 Generate Keypair",
+    privateKey: "Private Key:",
+    publicKey: "Public Key:",
+    btnSave: "Save",
+    btnSaveRestart: "Save & Restart",
+    btnCancel: "Cancel",
+    dnsTitle: "DNS Re-resolve",
+    btnRunNow: "Run Now",
+    autoReresolve: "Auto Re-resolve",
+    autoReresolveHint: "Periodically re-resolve domain endpoints and update peers when IP changes. Requires reboot to take effect.",
+    intervalSec: "Interval (sec)",
+    reresolveLog: "Re-resolve Log",
+    btnClear: "Clear",
+    runtimeLogTitle: "Runtime Log",
+    runtimeLogHint: "Recent startup, route maintenance, warning and error messages across all interfaces. Messages such as \"wg0 up\" indicate a successful startup.",
+    cmdMountTitle: "Shell Command Mount",
+    cmdMountToggleText: "Mount wg / wgksu commands",
+    cmdMountHint: "Adds wg and wgksu to the system command path for terminals. Off by default; WireGuard and WebUI work with this off. Changes take effect after reboot.",
+    noConfigs: "No configs",
+    noConfFiles: "No .conf files in /data/adb/wireguard/",
+    noConfigsFound: "No config files found. Click \"New Config\" to create one with a fresh keypair.",
+    newConfigBtn: "New Config",
+    interfaceLabel: "Interface",
+    addressLabel: "Address",
+    listenPortLabel: "Listen Port",
+    activeBadge: "active",
+    idleBadge: "idle",
+    endpointLabel: "Endpoint",
+    handshakeLabel: "Handshake",
+    allowedIpsLabel: "Allowed IPs",
+    transferLabel: "Transfer",
+    noPeersConfigured: "No peers configured",
+    interfaceNotRunning: "Interface not running",
+    downLabel: "Down",
+    configNotFound: "Config not found",
+    enabledStatus: "Enabled",
+    disabledStatus: "Disabled",
+    unavailableStatus: "Unavailable",
+    unavailableNoProvider: "Unavailable: no mount provider",
+    configuredOn: "Configured: On",
+    configuredOff: "Configured: Off",
+    savingStatus: "Saving...",
+    noLogEntries: "No log entries",
+    neverLabel: "never",
+    mountSaved: "Mount setting saved. Reboot to apply.",
+    saveFailed: "Save failed: ",
+    commandTimedOut: "Command timed out",
+    missingInterface: "Missing [Interface] section",
+    missingPrivateKey: "Missing PrivateKey",
+    missingPeer: "Missing [Peer] section",
+    replacePlaceholder: "Replace placeholder values before saving",
+    configSaved: "Config saved",
+    configSavedRestarted: "Config saved & restarted",
+    bootAutoStartEnabled: "Boot auto start enabled",
+    bootAutoStartDisabled: "Boot auto start disabled",
+    stayAwakeEnabled: "Stay Awake enabled",
+    stayAwakeDisabled: "Stay Awake disabled",
+    runtimeLogCleared: "Runtime log cleared",
+    keypairGenerated: "Keypair generated",
+    keypairGenFailed: "Failed to generate keypair",
+    createConfigFailed: "Failed to create config: ",
+    newConfigToast: "New config \"{name}\" — edit and save when ready",
+    interfaceNamePrompt: "Interface name:",
+    invalidInterfaceName: "Invalid interface name",
+    deleteConfirm: "Delete {name}.conf? This will also stop the interface.",
+    deletedToast: "{name} deleted",
+    deleteFailed: "Delete failed: ",
+    runningDns: "Running DNS re-resolve...",
+    noChangesDetected: "No changes detected",
+    reresolveComplete: "Re-resolve complete",
+    reresolveSettingsSaved: "Re-resolve settings saved",
+    reresolveLogCleared: "Re-resolve log cleared",
+    cannotCheckMount: "Cannot check mounting support. Try reopening the WebUI.",
+    mountProviderHint: "KernelSU requires an enabled mounting metamodule, such as MMRS or meta-overlayfs. WireGuard and WebUI work without one."
+  },
+  ru: {
+    checking: "Проверка...",
+    btnStart: "Запустить",
+    btnStop: "Остановить",
+    btnRestart: "Перезапустить",
+    peersTitle: "Пиры (Peers)",
+    loading: "Загрузка...",
+    configTitle: "Конфигурация",
+    btnEdit: "Изменить",
+    btnEditing: "Редактирование...",
+    btnDelete: "Удалить",
+    bootAutoStart: "Автозапуск при загрузке",
+    bootAutoStartHint: "Определяет, запускается ли WireGuard автоматически после загрузки системы.",
+    stayAwake: "Не гасить связь (Stay Awake)",
+    stayAwakeHint: "Удерживает wakelock и режим высокой производительности Wi-Fi, чтобы интерфейс был доступен при выключенном экране. Увеличивает расход батареи.",
+    btnGenKey: "🔑 Сгенерировать ключи",
+    privateKey: "Приватный ключ:",
+    publicKey: "Публичный ключ:",
+    btnSave: "Сохранить",
+    btnSaveRestart: "Сохранить и перезапустить",
+    btnCancel: "Отмена",
+    dnsTitle: "Повторное разрешение DNS",
+    btnRunNow: "Запустить",
+    autoReresolve: "Авто-разрешение DNS",
+    autoReresolveHint: "Периодически обновляет IP-адреса эндпоинтов доменов при их изменении. Требует перезагрузки для применения.",
+    intervalSec: "Интервал (сек)",
+    reresolveLog: "Лог разрешения DNS",
+    btnClear: "Очистить",
+    runtimeLogTitle: "Лог работы",
+    runtimeLogHint: "Последние сообщения о запускe, маршрутах, предупреждениях и ошибках. Сообщения вроде \"wg0 up\" означают успешный старт.",
+    cmdMountTitle: "Монтаж команд оболочки",
+    cmdMountToggleText: "Монтировать команды wg / wgksu",
+    cmdMountHint: "Добавляет wg и wgksu в системный путь терминала. По умолчанию выключено; WireGuard и WebUI работают и без этого. Изменения вступят в силу после перезагрузки.",
+    noConfigs: "Нет конфигов",
+    noConfFiles: "Нет файлов .conf в /data/adb/wireguard/",
+    noConfigsFound: "Конфигурационные файлы не найдены. Нажмите «Новый конфиг», чтобы создать его со свежими ключами.",
+    newConfigBtn: "Новый конфиг",
+    interfaceLabel: "Интерфейс",
+    addressLabel: "Адрес",
+    listenPortLabel: "Порт прослушивания",
+    activeBadge: "активен",
+    idleBadge: "неактивен",
+    endpointLabel: "Эндпоинт",
+    handshakeLabel: "Рукопожатие",
+    allowedIpsLabel: "Разрешенные IP",
+    transferLabel: "Передано",
+    noPeersConfigured: "Пиры не настроены",
+    interfaceNotRunning: "Интерфейс не запущен",
+    downLabel: "Остановлен",
+    configNotFound: "Конфиг не найден",
+    enabledStatus: "Включено",
+    disabledStatus: "Отключено",
+    unavailableStatus: "Недоступно",
+    unavailableNoProvider: "Недоступно: нет провайдера монтирования",
+    configuredOn: "Настроено: Вкл",
+    configuredOff: "Настроено: Выкл",
+    savingStatus: "Сохранение...",
+    noLogEntries: "Нет записей в логе",
+    neverLabel: "никогда",
+    mountSaved: "Настройка монтирования сохранена. Перезагрузите устройство.",
+    saveFailed: "Ошибка сохранения: ",
+    commandTimedOut: "Время ожидания команды истекло",
+    missingInterface: "Отсутствует секция [Interface]",
+    missingPrivateKey: "Отсутствует PrivateKey",
+    missingPeer: "Отсутствует секция [Peer]",
+    replacePlaceholder: "Замените значения-заполнители перед сохранением",
+    configSaved: "Конфиг сохранен",
+    configSavedRestarted: "Конфиг сохранен и перезапущен",
+    bootAutoStartEnabled: "Автозапуск при загрузке включен",
+    bootAutoStartDisabled: "Автозапуск при загрузке отключен",
+    stayAwakeEnabled: "Режим Stay Awake включен",
+    stayAwakeDisabled: "Режим Stay Awake отключен",
+    runtimeLogCleared: "Лог работы очищен",
+    keypairGenerated: "Пара ключей сгенерирована",
+    keypairGenFailed: "Не удалось сгенерировать ключи",
+    createConfigFailed: "Не удалось создать конфиг: ",
+    newConfigToast: "Новый конфиг \"{name}\" — отредактируйте и сохраните",
+    interfaceNamePrompt: "Имя интерфейса:",
+    invalidInterfaceName: "Недопустимое имя интерфейса",
+    deleteConfirm: "Удалить {name}.conf? Интерфейс также будет остановлен.",
+    deletedToast: "Интерфейс {name} удален",
+    deleteFailed: "Ошибка удаления: ",
+    runningDns: "Запуск повторного разрешения DNS...",
+    noChangesDetected: "Изменений не обнаружено",
+    reresolveComplete: "Разрешение DNS завершено",
+    reresolveSettingsSaved: "Настройки разрешения DNS сохранены",
+    reresolveLogCleared: "Лог разрешения DNS очищен",
+    cannotCheckMount: "Не удалось проверить поддержку монтирования. Попробуйте перезапустить WebUI.",
+    mountProviderHint: "KernelSU требует включенного метамодуля монтирования, например MMRS или meta-overlayfs. WireGuard и WebUI работают и без него."
+  }
+};
+
+// Автоопределение языка (русский, если язык браузера/системы начинается с ru, иначе английский)
+const userLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
+const currentLang = userLang.startsWith('ru') ? 'ru' : 'en';
+
+function t(key, vars = {}) {
+  let text = translations[currentLang][key] || translations['en'][key] || key;
+  for (const [k, v] of Object.entries(vars)) {
+    text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+  }
+  return text;
+}
+
+// Применяем статические переводы при загрузке
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (translations[currentLang][key]) {
+      el.textContent = translations[currentLang][key];
+    }
+  });
+});
 
 const WG_DATA = '/data/adb/wireguard';
 let currentIface = '';
@@ -189,21 +395,21 @@ async function refreshCommandMount() {
   const available = support.stdout.trim();
   if (r.errno !== 0 || support.errno !== 0 || !['0', '1'].includes(value) || !['0', '1'].includes(available)) {
     toggle.disabled = true;
-    status.textContent = 'Unavailable';
-    hint.textContent = 'Cannot check mounting support. Try reopening the WebUI.';
+    status.textContent = t('unavailableStatus');
+    hint.textContent = t('cannotCheckMount');
     return;
   }
   if (available === '0') {
     toggle.checked = false;
     toggle.disabled = true;
-    status.textContent = 'Unavailable: no mount provider';
-    hint.textContent = 'KernelSU requires an enabled mounting metamodule, such as MMRS or meta-overlayfs. WireGuard and WebUI work without one.';
+    status.textContent = t('unavailableNoProvider');
+    hint.textContent = t('mountProviderHint');
     return;
   }
   toggle.checked = value === '1';
   toggle.disabled = false;
-  status.textContent = toggle.checked ? 'Configured: On' : 'Configured: Off';
-  hint.textContent = 'Adds wg and wgksu to the system command path for terminals. Off by default; WireGuard and WebUI work with this off. Changes take effect after reboot.';
+  status.textContent = toggle.checked ? t('configuredOn') : t('configuredOff');
+  hint.textContent = t('cmdMountHint');
 }
 
 window.saveCommandMount = async function(enabled) {
@@ -211,27 +417,27 @@ window.saveCommandMount = async function(enabled) {
   const toggle = document.getElementById('commandMountToggle');
   const status = document.getElementById('commandMountStatus');
   toggle.disabled = true;
-  status.textContent = 'Saving...';
+  status.textContent = t('savingStatus');
   const r = await run(`${wgksuCmd} mount ${enabled ? 'enable' : 'disable'}`);
   commandMountSaving = false;
   await refreshCommandMount();
   if (r.errno === 0) {
-    toast('Mount setting saved. Reboot to apply.');
+    toast(t('mountSaved'));
   } else {
-    toast('Save failed: ' + (r.stderr || r.stdout), true);
+    toast(t('saveFailed') + (r.stderr || r.stdout), true);
   }
 };
 
-function stripAnsi(t) {
-  return String(t||'').replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g,'').replace(/\x1B[@-_]/g,'');
+function stripAnsi(tStr) {
+  return String(tStr||'').replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g,'').replace(/\x1B[@-_]/g,'');
 }
 
 function toast(msg, isError) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = isError ? 'toast error' : 'toast';
-  t.style.display = 'block';
-  setTimeout(() => t.style.display = 'none', 2500);
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.className = isError ? 'toast error' : 'toast';
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 2500);
 }
 
 function humanBytes(b) {
@@ -242,7 +448,7 @@ function humanBytes(b) {
 }
 
 function timeAgo(ts) {
-  if (!ts || ts === '0') return 'never';
+  if (!ts || ts === '0') return t('neverLabel');
   const sec = Math.floor(Date.now()/1000) - parseInt(ts);
   if (sec < 60) return sec + 's ago';
   if (sec < 3600) return Math.floor(sec/60) + 'm ago';
@@ -250,7 +456,6 @@ function timeAgo(ts) {
   return Math.floor(sec/86400) + 'd ago';
 }
 
-// parse `wg show <iface>` output
 function parseWgShow(text) {
   const result = { iface: {}, peers: [] };
   let current = null;
@@ -274,7 +479,6 @@ function parseWgShow(text) {
   return result;
 }
 
-// parse `wg show <iface> dump` — tab-separated, first line is interface
 function parseDump(text) {
   const peers = {};
   for (const line of text.split('\n').slice(1)) {
@@ -298,40 +502,36 @@ async function refresh() {
   const ifaces = await getInterfaces();
 
   if (!ifaces.length) {
-    document.getElementById('statusBadge').innerHTML = '<span class="status-dot off"></span>No configs';
+    document.getElementById('statusBadge').innerHTML = `<span class="status-dot off"></span>${t('noConfigs')}`;
     document.getElementById('ifaceTabs').innerHTML = '';
     document.getElementById('ifaceInfo').innerHTML = '';
-    document.getElementById('peers').innerHTML = '<div style="color:var(--dim);padding:8px">No .conf files in /data/adb/wireguard/</div>';
-    document.getElementById('configView').textContent = 'No config files found. Click "New Config" to create one with a fresh keypair.';
-    document.getElementById('editBtn').textContent = 'New Config';
+    document.getElementById('peers').innerHTML = `<div style="color:var(--dim);padding:8px">${t('noConfFiles')}</div>`;
+    document.getElementById('configView').textContent = t('noConfigsFound');
+    document.getElementById('editBtn').textContent = t('newConfigBtn');
     document.getElementById('editBtn').disabled = false;
     document.getElementById('editBtn').onclick = createNewConfig;
     return;
   }
-  document.getElementById('editBtn').textContent = 'Edit';
+  document.getElementById('editBtn').textContent = t('btnEdit');
   document.getElementById('editBtn').onclick = toggleEdit;
 
   if (!currentIface || !ifaces.includes(currentIface)) currentIface = ifaces[0];
 
-  // tabs with + button
   document.getElementById('ifaceTabs').innerHTML = ifaces.map(i =>
     `<span class="iface-tab ${i===currentIface?'active':''}" onclick="switchIface('${i}')">${i}</span>`
-  ).join('') + '<span class="iface-tab" onclick="addNewIface()" title="New interface">＋</span>';
+  ).join('') + `<span class="iface-tab" onclick="addNewIface()" title="${t('newConfigBtn')}">＋</span>`;
 
-  // check if current interface is up
   const linkCheck = await run(`ip link show ${currentIface} 2>/dev/null`);
   const isUp = linkCheck.errno === 0 && linkCheck.stdout.includes('UP');
 
-  // overall status
   const anyUp = await run(`${wgCmd} show interfaces 2>/dev/null`);
   const runningIfaces = anyUp.stdout.trim();
   if (runningIfaces) {
     document.getElementById('statusBadge').innerHTML = `<span class="status-dot on"></span>Running (${runningIfaces.replace(/\n/g,', ')})`;
   } else {
-    document.getElementById('statusBadge').innerHTML = '<span class="status-dot off"></span>Stopped';
+    document.getElementById('statusBadge').innerHTML = `<span class="status-dot off"></span>Stopped`;
   }
 
-  // interface info
   if (isUp) {
     const wgOut = await run(`${wgCmd} show ${currentIface} 2>/dev/null`);
     const parsed = parseWgShow(wgOut.stdout);
@@ -341,13 +541,12 @@ async function refresh() {
     const ipMatch = ipOut.stdout.match(/inet ([^\s]+)/);
 
     document.getElementById('ifaceInfo').innerHTML = `<table class="info-table">
-      <tr><td>Interface</td><td>${currentIface}</td></tr>
-      ${ipMatch ? `<tr><td>Address</td><td>${ipMatch[1]}</td></tr>` : ''}
-      ${parsed.iface.listeningport ? `<tr><td>Listen Port</td><td>${parsed.iface.listeningport}</td></tr>` : ''}
-      ${parsed.iface.publickey ? `<tr><td>Public Key</td><td style="font-family:monospace;font-size:11px">${parsed.iface.publickey}</td></tr>` : ''}
+      <tr><td>${t('interfaceLabel')}</td><td>${currentIface}</td></tr>
+      ${ipMatch ? `<tr><td>${t('addressLabel')}</td><td>${ipMatch[1]}</td></tr>` : ''}
+      ${parsed.iface.listeningport ? `<tr><td>${t('listenPortLabel')}</td><td>${parsed.iface.listeningport}</td></tr>` : ''}
+      ${parsed.iface.publickey ? `<tr><td>${t('publicKey')}</td><td style="font-family:monospace;font-size:11px">${parsed.iface.publickey}</td></tr>` : ''}
     </table>`;
 
-    // peers
     if (parsed.peers.length) {
       document.getElementById('peers').innerHTML = parsed.peers.map(p => {
         const dump = dumpPeers[p.publicKey] || {};
@@ -360,45 +559,41 @@ async function refresh() {
         return `<div class="peer-card">
           <div class="peer-header">
             <span class="peer-name">${p.publicKey.substring(0,20)}...</span>
-            <span class="peer-badge ${active?'active':'inactive'}">${active?'active':'idle'}</span>
+            <span class="peer-badge ${active?'active':'inactive'}">${active?t('activeBadge'):t('idleBadge')}</span>
           </div>
           <div class="peer-detail">
-            ${endpoint && endpoint !== '(none)' ? `<span><span class="dim">Endpoint</span> ${endpoint}</span>` : ''}
-            <span><span class="dim">Handshake</span> ${timeAgo(handshake)}</span>
-            ${p.allowedips ? `<span><span class="dim">Allowed IPs</span> ${p.allowedips}</span>` : ''}
-            ${rx ? `<span><span class="dim">Transfer</span> ↓${rx} ↑${tx}</span>` : ''}
+            ${endpoint && endpoint !== '(none)' ? `<span><span class="dim">${t('endpointLabel')}</span> ${endpoint}</span>` : ''}
+            <span><span class="dim">${t('handshakeLabel')}</span> ${timeAgo(handshake)}</span>
+            ${p.allowedips ? `<span><span class="dim">${t('allowedIpsLabel')}</span> ${p.allowedips}</span>` : ''}
+            ${rx ? `<span><span class="dim">${t('transferLabel')}</span> ↓${rx} ↑${tx}</span>` : ''}
           </div>
         </div>`;
       }).join('');
     } else {
-      document.getElementById('peers').innerHTML = '<div style="color:var(--dim);padding:8px">No peers configured</div>';
+      document.getElementById('peers').innerHTML = `<div style="color:var(--dim);padding:8px">${t('noPeersConfigured')}</div>`;
     }
   } else {
-    document.getElementById('ifaceInfo').innerHTML = `<table class="info-table"><tr><td>${currentIface}</td><td style="color:var(--red)">Down</td></tr></table>`;
-    document.getElementById('peers').innerHTML = '<div style="color:var(--dim);padding:8px">Interface not running</div>';
+    document.getElementById('ifaceInfo').innerHTML = `<table class="info-table"><tr><td>${currentIface}</td><td style="color:var(--red)">${t('downLabel')}</td></tr></table>`;
+    document.getElementById('peers').innerHTML = `<div style="color:var(--dim);padding:8px">${t('interfaceNotRunning')}</div>`;
   }
 
-  // config
   if (!window._editing) {
     const cfg = await run(`cat ${WG_DATA}/${currentIface}.conf 2>/dev/null`);
-    document.getElementById('configView').textContent = cfg.stdout || 'Config not found';
+    document.getElementById('configView').textContent = cfg.stdout || t('configNotFound');
   }
 
-  // autostart (per-interface)
   const as = await run(`sh -c 'AUTO_START=1; [ -f ${WG_DATA}/autostart.${currentIface} ] && . ${WG_DATA}/autostart.${currentIface}; echo \${AUTO_START:-1}'`);
   const enabled = as.stdout.trim() !== '0';
   document.getElementById('autoStartToggle').checked = enabled;
-  document.getElementById('autoStartStatus').textContent = enabled ? 'Enabled' : 'Disabled';
+  document.getElementById('autoStartStatus').textContent = enabled ? t('enabledStatus') : t('disabledStatus');
 
-  // stay awake (per-interface)
   const sa = await run(`sh -c 'STAY_AWAKE=0; [ -f ${WG_DATA}/stayawake.${currentIface} ] && . ${WG_DATA}/stayawake.${currentIface}; echo \${STAY_AWAKE:-0}'`);
   const stayAwake = sa.stdout.trim() === '1';
   document.getElementById('stayAwakeToggle').checked = stayAwake;
-  document.getElementById('stayAwakeStatus').textContent = stayAwake ? 'Enabled' : 'Disabled';
+  document.getElementById('stayAwakeStatus').textContent = stayAwake ? t('enabledStatus') : t('disabledStatus');
 
-  // log
   const log = await run(`tail -50 ${WG_DATA}/error.log 2>/dev/null`);
-  document.getElementById('log').textContent = stripAnsi(log.stdout) || 'No log entries';
+  document.getElementById('log').textContent = stripAnsi(log.stdout) || t('noLogEntries');
 }
 
 window.switchIface = function(name) {
@@ -412,11 +607,11 @@ window.control = async function(action) {
   btn.disabled = true; btn.textContent = '...';
   const timeout = new Promise(r => setTimeout(() => r({ errno: -1, stdout: '', stderr: 'timeout' }), 15000));
   const result = await Promise.race([run(`${wgksuCmd} ${action} ${currentIface}`), timeout]);
-  if (result.stderr === 'timeout') toast('Command timed out', true);
+  if (result.stderr === 'timeout') toast(t('commandTimedOut'), true);
   await new Promise(r => setTimeout(r, 500));
   await refresh();
   btn.disabled = false;
-  btn.textContent = action.charAt(0).toUpperCase() + action.slice(1);
+  btn.textContent = translations[currentLang]['btn' + action.charAt(0).toUpperCase() + action.slice(1)] || action;
 };
 
 window.toggleEdit = async function() {
@@ -426,7 +621,7 @@ window.toggleEdit = async function() {
     document.getElementById('configView').style.display = 'none';
     document.getElementById('configEdit').style.display = 'block';
     document.getElementById('configBtns').style.display = 'flex';
-    document.getElementById('editBtn').textContent = 'Editing...';
+    document.getElementById('editBtn').textContent = t('btnEditing');
     document.getElementById('editBtn').disabled = true;
     window._editing = true;
   }
@@ -436,25 +631,24 @@ window.cancelEdit = function() {
   document.getElementById('configView').style.display = 'block';
   document.getElementById('configEdit').style.display = 'none';
   document.getElementById('configBtns').style.display = 'none';
-  document.getElementById('editBtn').textContent = 'Edit';
+  document.getElementById('editBtn').textContent = t('btnEdit');
   document.getElementById('editBtn').disabled = false;
   window._editing = false;
 };
 
 window.saveConfig = async function() {
   const content = document.getElementById('configEdit').value;
-  // basic validation
-  if (!/\[Interface\]/i.test(content)) { toast('Missing [Interface] section', true); return; }
-  if (!/PrivateKey\s*=/i.test(content)) { toast('Missing PrivateKey', true); return; }
-  if (!/\[Peer\]/i.test(content)) { toast('Missing [Peer] section', true); return; }
-  if (/REPLACE_WITH_/.test(content)) { toast('Replace placeholder values before saving', true); return; }
+  if (!/\[Interface\]/i.test(content)) { toast(t('missingInterface'), true); return; }
+  if (!/PrivateKey\s*=/i.test(content)) { toast(t('missingPrivateKey'), true); return; }
+  if (!/\[Peer\]/i.test(content)) { toast(t('missingPeer'), true); return; }
+  if (/REPLACE_WITH_/.test(content)) { toast(t('replacePlaceholder'), true); return; }
   const r = await run(`cat > ${WG_DATA}/${currentIface}.conf << 'WGCONF'\n${content}\nWGCONF`);
   if (r.errno === 0) {
-    toast('Config saved');
+    toast(t('configSaved'));
     cancelEdit();
     await refresh();
   } else {
-    toast('Save failed: ' + r.stderr, true);
+    toast(t('saveFailed') + r.stderr, true);
   }
 };
 
@@ -463,50 +657,50 @@ window.saveAndRestart = async function() {
   await run(`${wgksuCmd} restart`);
   await new Promise(r => setTimeout(r, 1000));
   await refresh();
-  toast('Config saved & restarted');
+  toast(t('configSavedRestarted'));
 };
 
 window.saveAutoStart = async function(enabled) {
   const toggle = document.getElementById('autoStartToggle');
   const status = document.getElementById('autoStartStatus');
-  toggle.disabled = true; status.textContent = 'Saving...';
+  toggle.disabled = true; status.textContent = t('savingStatus');
   const r = await run(`cat > ${WG_DATA}/autostart.${currentIface} << 'WGAUTO'\nAUTO_START=${enabled?'1':'0'}\nWGAUTO`);
   toggle.disabled = false;
   if (r.errno === 0) {
     toggle.checked = enabled;
-    status.textContent = enabled ? 'Enabled' : 'Disabled';
-    toast(enabled ? 'Boot auto start enabled' : 'Boot auto start disabled');
+    status.textContent = enabled ? t('enabledStatus') : t('disabledStatus');
+    toast(enabled ? t('bootAutoStartEnabled') : t('bootAutoStartDisabled'));
   } else {
     toggle.checked = !enabled;
-    status.textContent = (!enabled) ? 'Enabled' : 'Disabled';
-    toast('Save failed: ' + r.stderr, true);
+    status.textContent = (!enabled) ? t('enabledStatus') : t('disabledStatus');
+    toast(t('saveFailed') + r.stderr, true);
   }
 };
 
 window.saveStayAwake = async function(enabled) {
   const toggle = document.getElementById('stayAwakeToggle');
   const status = document.getElementById('stayAwakeStatus');
-  toggle.disabled = true; status.textContent = 'Saving...';
+  toggle.disabled = true; status.textContent = t('savingStatus');
   const r = await run(`${wgksuCmd} stay-awake ${enabled ? 'enable' : 'disable'} ${currentIface}`);
   toggle.disabled = false;
   if (r.errno === 0) {
     toggle.checked = enabled;
-    status.textContent = enabled ? 'Enabled' : 'Disabled';
-    toast(enabled ? 'Stay Awake enabled' : 'Stay Awake disabled');
+    status.textContent = enabled ? t('enabledStatus') : t('disabledStatus');
+    toast(enabled ? t('stayAwakeEnabled') : t('stayAwakeDisabled'));
   } else {
     toggle.checked = !enabled;
-    status.textContent = (!enabled) ? 'Enabled' : 'Disabled';
-    toast('Save failed: ' + r.stderr, true);
+    status.textContent = (!enabled) ? t('enabledStatus') : t('disabledStatus');
+    toast(t('saveFailed') + r.stderr, true);
   }
 };
 
 window.clearLog = async function() {
   const r = await run(`: > ${WG_DATA}/error.log`);
   if (r.errno === 0) {
-    document.getElementById('log').textContent = 'No log entries';
-    toast('Runtime log cleared');
+    document.getElementById('log').textContent = t('noLogEntries');
+    toast(t('runtimeLogCleared'));
   } else {
-    toast('Clear failed: ' + r.stderr, true);
+    toast(t('saveFailed') + r.stderr, true);
   }
 };
 
@@ -517,9 +711,9 @@ window.genKey = async function() {
     document.getElementById('keyPriv').textContent = lines[0];
     document.getElementById('keyPub').textContent = lines[1];
     document.getElementById('keyResult').style.display = 'block';
-    toast('Keypair generated');
+    toast(t('keypairGenerated'));
   } else {
-    toast('Failed to generate keypair', true);
+    toast(t('keypairGenFailed'), true);
   }
 };
 
@@ -527,52 +721,49 @@ window.createNewConfig = async function(ifaceName) {
   const name = ifaceName || 'wg0';
   const r = await run(`privkey=$(${wgCmd} genkey) && echo "$privkey" && echo "$privkey" | ${wgCmd} pubkey`);
   const lines = r.stdout.trim().split('\n');
-  if (lines.length !== 2) { toast('Failed to generate keypair', true); return; }
+  if (lines.length !== 2) { toast(t('keypairGenFailed'), true); return; }
   const conf = `[Interface]\nPrivateKey = ${lines[0]}\nAddress = 10.0.0.2/24\n# DNS = 1.1.1.1\n# MTU = 1420\n\n[Peer]\nPublicKey = REPLACE_WITH_SERVER_PUBLIC_KEY\nEndpoint = REPLACE_WITH_SERVER_IP:51820\nAllowedIPs = 10.0.0.0/24\nPersistentKeepalive = 25`;
-  // write file immediately so tab appears
   const w = await run(`printf '%b' '${conf.replace(/'/g,"'\\''")}'  > ${WG_DATA}/${name}.conf`);
-  if (w.errno !== 0) { toast('Failed to create config: ' + w.stderr, true); return; }
-  // switch to new tab and open editor
+  if (w.errno !== 0) { toast(t('createConfigFailed') + w.stderr, true); return; }
   currentIface = name;
   await refresh();
   document.getElementById('keyPriv').textContent = lines[0];
   document.getElementById('keyPub').textContent = lines[1];
   document.getElementById('keyResult').style.display = 'block';
   toggleEdit();
-  toast(`New config "${name}" — edit and save when ready`);
+  toast(t('newConfigToast', { name }));
 };
 
 window.addNewIface = async function() {
   const ifaces = await getInterfaces();
-  // find next available wgN name
   let n = 0;
   while (ifaces.includes('wg' + n)) n++;
-  const name = prompt('Interface name:', 'wg' + n);
+  const name = prompt(t('interfaceNamePrompt'), 'wg' + n);
   if (!name) return;
-  if (!/^[a-zA-Z0-9_-]+$/.test(name)) { toast('Invalid interface name', true); return; }
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) { toast(t('invalidInterfaceName'), true); return; }
   await createNewConfig(name);
 };
 
 window.deleteConfig = async function() {
   if (!currentIface) return;
-  if (!confirm(`Delete ${currentIface}.conf? This will also stop the interface.`)) return;
+  if (!confirm(t('deleteConfirm', { name: currentIface }))) return;
   await run(`${wgksuCmd} stop ${currentIface}`);
   const r = await run(`rm -f ${WG_DATA}/${currentIface}.conf`);
   if (r.errno === 0) {
-    toast(`${currentIface} deleted`);
+    toast(t('deletedToast', { name: currentIface }));
     currentIface = '';
     await refresh();
   } else {
-    toast('Delete failed: ' + r.stderr, true);
+    toast(t('deleteFailed') + r.stderr, true);
   }
 };
 
 window.triggerReresolve = async function() {
-  toast('Running DNS re-resolve...');
+  toast(t('runningDns'));
   await run(`${wgksuCmd} reresolve-dns ${currentIface}`);
   const log = await run(`tail -20 ${WG_DATA}/reresolve.log 2>/dev/null`);
-  document.getElementById('reresolveLog').textContent = log.stdout.trim() || 'No changes detected';
-  toast('Re-resolve complete');
+  document.getElementById('reresolveLog').textContent = log.stdout.trim() || t('noChangesDetected');
+  toast(t('reresolveComplete'));
 };
 
 window.saveReresolve = async function() {
@@ -580,17 +771,17 @@ window.saveReresolve = async function() {
   const interval = document.getElementById('reresolveInterval').value || '120';
   const r = await run(`cat > ${WG_DATA}/reresolve.${currentIface} << 'WGRR'\nRERESOLVE_ENABLED=${enabled}\nRERESOLVE_INTERVAL=${interval}\nWGRR`);
   if (r.errno === 0) {
-    document.getElementById('reresolveStatus').textContent = enabled === '1' ? `Enabled (${interval}s)` : 'Disabled';
-    toast('Re-resolve settings saved');
+    document.getElementById('reresolveStatus').textContent = enabled === '1' ? `${t('enabledStatus')} (${interval}s)` : t('disabledStatus');
+    toast(t('reresolveSettingsSaved'));
   } else {
-    toast('Save failed: ' + r.stderr, true);
+    toast(t('saveFailed') + r.stderr, true);
   }
 };
 
 window.clearReresolveLog = async function() {
   await run(`: > ${WG_DATA}/reresolve.log`);
-  document.getElementById('reresolveLog').textContent = 'No entries';
-  toast('Re-resolve log cleared');
+  document.getElementById('reresolveLog').textContent = t('noLogEntries');
+  toast(t('reresolveLogCleared'));
 };
 
 async function refreshReresolve() {
@@ -600,9 +791,9 @@ async function refreshReresolve() {
   const interval = parts[1] || '120';
   document.getElementById('reresolveToggle').checked = enabled;
   document.getElementById('reresolveInterval').value = interval;
-  document.getElementById('reresolveStatus').textContent = enabled ? `Enabled (${interval}s)` : 'Disabled';
+  document.getElementById('reresolveStatus').textContent = enabled ? `${t('enabledStatus')} (${interval}s)` : t('disabledStatus');
   const log = await run(`tail -20 ${WG_DATA}/reresolve.log 2>/dev/null`);
-  document.getElementById('reresolveLog').textContent = log.stdout.trim() || 'No entries';
+  document.getElementById('reresolveLog').textContent = log.stdout.trim() || t('noLogEntries');
 }
 
 refresh();
