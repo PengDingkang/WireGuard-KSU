@@ -1,3 +1,4 @@
+# shellcheck shell=sh disable=SC2034
 status_running="Работает"
 status_stopped="Остановлен"
 msg_error_module_dir_missing="ОШИБКА: каталог модуля WireGuard не найден"
@@ -6,6 +7,7 @@ msg_mount_saved="Настройка монтирования команд сох
 msg_error_config_not_found="ОШИБКА: конфиг не найден: "
 msg_error_interface_section_missing="ОШИБКА: отсутствует секция [Interface] в "
 msg_error_private_key_missing="ОШИБКА: отсутствует PrivateKey в "
+msg_error_peer_section_missing="ОШИБКА: отсутствует секция [Peer] в "
 msg_error_config_placeholders="ОШИБКА: конфиг "
 msg_error_config_placeholders_suffix=" содержит незаменённые шаблонные значения; отредактируйте его перед запуском"
 msg_error_interface_create="ОШИБКА: не удалось создать интерфейс WireGuard (возможно, ядро не поддерживает WireGuard)"
@@ -63,3 +65,4 @@ install_complete="Установка завершена; перезагрузи�
 install_config_dir="Каталог конфигураций:"
 install_manage="Управление:"
 install_mount_webui_hint="Режим монтирования команд меняется в WebUI (требуется перезагрузка)"
+
