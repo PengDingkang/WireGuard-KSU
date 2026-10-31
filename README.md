@@ -1,4 +1,4 @@
-[简体中文](README_CN.md) | **English** | [Русский](README_RU.md)
+<p align="center"> [简体中文](README_CN.md) | **English** | [Русский](README_RU.md) </p>
 
 # WireGuard-KSU
 
