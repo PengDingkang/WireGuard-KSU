@@ -37,7 +37,7 @@
   "stoppedStatus": "Остановлен",
   "noConfFiles": "Нет файлов .conf в /data/adb/wireguard/",
   "noConfigsFound": "Конфигурационные файлы не найдены. Нажмите «Новый конфиг», чтобы создать его со свежими ключами.",
-  "newConfigBtn": "Новый конфиг",
+  "newConfigBtn": "Новый",
   "interfaceLabel": "Интерфейс:",
   "addressLabel": "Адрес:",
   "listenPortLabel": "Порт прослушивания:",
