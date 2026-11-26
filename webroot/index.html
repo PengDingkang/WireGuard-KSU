@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -258,30 +258,24 @@ import { exec } from 'https://esm.sh/kernelsu';
 
 let translations = {};
 
-// Асинхронная загрузка локализации перед стартом приложения
 async function initLocalization() {
-  const userLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
-  const lang = userLang.startsWith('ru') ? 'ru' : 'en';
-  document.documentElement.lang = lang;
-  
-  try {
-    const response = await fetch(`./locales/${lang}.json`);
-    if (response.ok) {
-      translations = await response.json();
-    } else {
-      throw new Error('Failed to load lang file');
-    }
-  } catch (e) {
-    // Резервный вариант на случай ошибки загрузки — пробуем английский
+  const language = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split(/[-_]/)[0];
+  const supportedLocales = new Map([['ru', 'ru'], ['zh', 'zh-CN']]);
+  const preferredLocale = supportedLocales.get(language) || 'en';
+  const locales = preferredLocale === 'en' ? ['en'] : [preferredLocale, 'en'];
+
+  for (const locale of locales) {
     try {
-      const fallback = await fetch('./locales/en.json');
-      translations = await fallback.json();
-    } catch (err) {
-      translations = {};
+      const response = await fetch(`./locales/${locale}.json`);
+      if (!response.ok) continue;
+      translations = await response.json();
+      document.documentElement.lang = locale;
+      break;
+    } catch {
+      // Try the next locale if the download or JSON parsing fails.
     }
   }
 
-  // Применяем переводы к элементам интерфейса
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
     if (translations[key]) {

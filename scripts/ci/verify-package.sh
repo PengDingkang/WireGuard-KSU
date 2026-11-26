@@ -22,6 +22,9 @@ required_paths="
 META-INF/com/google/android/update-binary
 META-INF/com/google/android/updater-script
 webroot/index.html
+webroot/locales/en.json
+webroot/locales/ru.json
+webroot/locales/zh-CN.json
 translations/en/strings.sh
 translations/ru/strings.sh
 boot-completed.sh
