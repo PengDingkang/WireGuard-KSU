@@ -1,7 +1,17 @@
-# Unreleased
+# WireGuard KSU v1.3.0
 
-- Add Simplified Chinese to the WebUI, selected automatically from the device language.
-- Publish updater metadata only after the uploaded public ZIP matches the local package; preserve stable metadata on failures or prereleases, and retry concurrent branch updates without downgrading versions.
+## Localization and WebUI
+
+- Add English and Russian translations for the installer, `wgksu` messages, and the KernelSU module description. The module follows the Android system language and falls back to English.
+- Add English, Russian, and Simplified Chinese WebUI translations. The WebUI selects the language automatically and localizes interface status, handshake times, DNS re-resolution intervals, and action messages.
+- Fix duplicate WebUI status rendering and provide English, Simplified Chinese, and Russian READMEs with language links.
+
+## Releases and updates
+
+- Include and verify the shell and WebUI translation files in the module ZIP. Expand regression coverage for the installer, CLI, and localized module description.
+- Publish updater metadata only for stable releases whose public ZIP matches the local package. Link to the changelog at the release tag and retry concurrent metadata updates while preserving newer advertised versions.
+
+Thanks to @LegacyFreeman for the English and Russian localization and WebUI updates. [PR #5](https://github.com/PengDingkang/WireGuard-KSU/pull/5)
 
 # WireGuard KSU v1.2.0
 

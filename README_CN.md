@@ -1,4 +1,4 @@
-**简体中文** | [English](README_EN.md) | [Русский](README_RU.md)
+**简体中文** | [English](README.md) | [Русский](README_RU.md)
 
 # WireGuard-KSU
 

@@ -217,8 +217,3 @@ repository. The first verified stable release creates `update.json` if needed.
 This project (module scripts and WebUI) is licensed under the [MIT License](LICENSE).
 
 The `wg` tool is built by CI from [wireguard-tools](https://git.zx2c4.com/wireguard-tools) and is subject to [GPL-2.0](https://git.zx2c4.com/wireguard-tools/about/).
-
-
-本项目（模块脚本、WebUI）采用 [MIT License](LICENSE)。
-
-`wg` 工具由 CI 从 [wireguard-tools](https://git.zx2c4.com/wireguard-tools) 编译，受 [GPL-2.0](https://git.zx2c4.com/wireguard-tools/about/) 约束。

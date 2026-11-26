@@ -73,6 +73,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
           name: ${{ steps.meta.outputs.release_name }}
           prerelease: ${{ inputs.prerelease }}
           files: dist/${{ steps.meta.outputs.package_name }}
