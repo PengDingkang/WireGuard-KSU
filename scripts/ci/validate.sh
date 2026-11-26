@@ -18,6 +18,7 @@ scripts/ci/validate.sh
 scripts/ci/build-wg.sh
 scripts/ci/package-module.sh
 scripts/ci/verify-package.sh
+scripts/ci/publish-update.sh
 "
 
 for script in $scripts; do
@@ -28,3 +29,4 @@ done
 sh tests/test_endpoint_route_locks.sh
 sh tests/test_boot_start.sh
 sh tests/test_command_mount.sh
+python3 tests/test_release_update.py

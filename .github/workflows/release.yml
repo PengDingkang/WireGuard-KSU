@@ -13,6 +13,10 @@ on:
         default: false
         type: boolean
 
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -26,7 +30,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y git make file shellcheck zip unzip g++-aarch64-linux-gnu
+          sudo apt-get install -y git make file shellcheck zip unzip python3 g++-aarch64-linux-gnu
 
       - name: Read module metadata
         id: meta
@@ -52,27 +56,6 @@ jobs:
       - name: Verify package contents
         run: sh scripts/ci/verify-package.sh "dist/${{ steps.meta.outputs.package_name }}"
 
-      - name: Generate update JSON
-        run: |
-          cat > dist/update.json <<EOF
-          {
-            "version": "${{ steps.meta.outputs.module_version }}",
-            "versionCode": $(sed -n 's/^versionCode=//p' module.prop),
-            "zipUrl": "https://github.com/${{ github.repository }}/releases/download/${{ steps.meta.outputs.tag_name }}/${{ steps.meta.outputs.package_name }}",
-            "changelog": "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/changelog.md"
-          }
-          EOF
-
-      - name: Update repository update.json
-        if: ${{ !inputs.prerelease }}
-        run: |
-          cp dist/update.json update.json
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update.json
-          git diff --cached --quiet || git commit -m "Update update.json for ${{ steps.meta.outputs.tag_name }}"
-          git push origin HEAD:${{ github.ref_name }}
-
       - name: Prepare release notes
         run: |
           awk '
@@ -86,11 +69,44 @@ jobs:
           test -s dist/release-notes.md
 
       - name: Create GitHub release
+        id: release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag_name }}
           name: ${{ steps.meta.outputs.release_name }}
           prerelease: ${{ inputs.prerelease }}
           files: dist/${{ steps.meta.outputs.package_name }}
+          fail_on_unmatched_files: true
           body_path: dist/release-notes.md
           generate_release_notes: true
+
+      - name: Verify public ZIP and prepare update metadata
+        if: ${{ !inputs.prerelease }}
+        env:
+          RELEASE_ASSETS: ${{ steps.release.outputs.assets }}
+          PACKAGE_NAME: ${{ steps.meta.outputs.package_name }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag_name }}
+        run: |
+          python3 scripts/ci/prepare-update.py \
+            --package "dist/$PACKAGE_NAME" \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$RELEASE_TAG" \
+            --output dist/update.json
+
+      - name: Checkout current update branch
+        if: ${{ !inputs.prerelease }}
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .update-metadata
+
+      - name: Publish stable update metadata
+        if: ${{ !inputs.prerelease }}
+        env:
+          UPDATE_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag_name }}
+        run: |
+          sh scripts/ci/publish-update.sh \
+            "$GITHUB_WORKSPACE/dist/update.json" \
+            "$GITHUB_WORKSPACE/.update-metadata" \
+            "$UPDATE_BRANCH" "$RELEASE_TAG"

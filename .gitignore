@@ -1,3 +1,4 @@
 dist/
 *.zip
 wg
+__pycache__/

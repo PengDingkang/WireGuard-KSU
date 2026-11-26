@@ -202,6 +202,19 @@ wg genkey | tee privatekey | wg pubkey > publickey
 - 内核需要 `CONFIG_WIREGUARD=y`（Linux 5.6+）
 - arm64 设备
 
+## 发布与更新元数据
+
+准备新版本时更新模块版本、核心锁定文件和 changelog，**不要提前把 `update.json` 改为尚未发布的版本**。
+该文件只表示最近一次已成功发布并验证的稳定版，由 Release Action 维护。
+
+发布顺序为：构建/检查 → 创建 Release 并上传 ZIP → 无认证访问公开下载链接，核对 ZIP 大小和 SHA256
+与本地发布包一致 → 从包内 `module.prop` 生成元数据 → 更新默认分支的 `update.json`。
+更新日志链接固定到该 Release 标签，避免后续文档变动与已发布版本不一致。
+
+上传失败、公开链接不可用或内容不匹配时，稳定版元数据不会更新；预发布也不会覆盖它。
+元数据通过独立的最新分支检出推送，遇到并发提交会重试，不会用旧版本覆盖更高的版本号。
+Release 流程按仓库串行执行。首次正式发布之前可以没有 `update.json`，首发验证成功后会自动创建。
+
 ## License
 
 本项目（模块脚本、WebUI）采用 [MIT License](LICENSE)。

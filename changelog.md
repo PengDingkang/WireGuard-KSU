@@ -1,3 +1,7 @@
+# Unreleased
+
+- Publish updater metadata only after the uploaded public ZIP matches the local package; preserve stable metadata on failures or prereleases, and retry concurrent branch updates without downgrading versions.
+
 # WireGuard KSU v1.2.0
 
 ## Upgrade notice
