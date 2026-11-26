@@ -25,7 +25,7 @@ cleanup() {
 trap cleanup 0 1 2 15
 
 zip -qr "$package_tmp" \
-  META-INF webroot \
+  META-INF webroot translations \
   boot-completed.sh customize.sh uninstall.sh \
   wgksu wg wg0.conf.example \
   module.prop

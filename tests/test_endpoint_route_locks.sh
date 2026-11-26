@@ -5,6 +5,7 @@ set -eu
 repo_dir=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 test_tmp=$(mktemp -d)
 test_data="$test_tmp/data"
+test_module="$test_tmp/modules/WireGuard-KSU"
 test_lib="$test_tmp/wgksu-lock-functions.sh"
 test_full_lib="$test_tmp/wgksu-functions.sh"
 test_holder="$test_tmp/wgksu-lock-holder.sh"
@@ -50,7 +51,8 @@ wait_for_file() {
   done
 }
 
-mkdir -p "$test_data"
+mkdir -p "$test_data" "$test_module"
+cp -R "$repo_dir/translations" "$test_module/"
 
 # Redirect a complete wgksu copy and its BusyBox fallback into the test temp
 # directory. The full copy runs the internal lock-holder command, while the
@@ -63,7 +65,9 @@ chmod 755 "$test_busybox_no_flock"
 chmod 755 "$test_delayed_holder"
 PATH="$test_tmp:$PATH"
 export PATH
-sed "s|^wg_data=.*|wg_data=\"$test_data\"|" "$repo_dir/wgksu" > "$test_holder"
+sed -e "s|^wg_data=.*|wg_data=\"$test_data\"|" \
+    -e "s|^wg_module=.*|wg_module=\"$test_module\"|" \
+    "$repo_dir/wgksu" > "$test_holder"
 chmod 755 "$test_holder"
 awk '
   /^  : > "\$holder_ready_file"$/ {
