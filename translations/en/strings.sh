@@ -13,6 +13,7 @@ msg_error_config_placeholders_suffix=" still has placeholder values, edit before
 msg_error_interface_create="ERROR: failed to create WireGuard interface (kernel support missing?)"
 msg_error_endpoint_routes="ERROR: failed to prepare endpoint routes for "
 msg_error_wg_setconf="ERROR: wg setconf failed for "
+msg_error_autotunnel_blocked="Refused to start: blocked by Auto-Tunnel rule"
 msg_iface_already_up=" is already up"
 msg_iface_up=" up"
 msg_iface_down=" down"

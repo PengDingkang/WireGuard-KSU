@@ -1,4 +1,6 @@
 dist/
 *.zip
+*.idsig
+companion/wgksu-status.jks
 wg
 __pycache__/

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.wireguard.ksu.status"
+    android:versionCode="2"
+    android:versionName="1.3.1">
+
+    <uses-sdk
+        android:minSdkVersion="28"
+        android:targetSdkVersion="35" />
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@drawable/ic_launcher_wg"
+        android:label="WireGuard">
+
+        <receiver
+            android:name=".StatusReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.wireguard.ksu.status.UPDATE" />
+                <action android:name="com.wireguard.ksu.status.CANCEL" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".ActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.wireguard.ksu.status.ACTION_START" />
+                <action android:name="com.wireguard.ksu.status.ACTION_STOP" />
+                <action android:name="com.wireguard.ksu.status.ACTION_RESUME_AUTO" />
+            </intent-filter>
+        </receiver>
+
+        <activity
+            android:name=".OpenPanelActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+    </application>
+</manifest>

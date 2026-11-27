@@ -114,6 +114,33 @@ WGKSU_TEST_SETTINGS_LOCALE=ru-RU run_status
 [ "$(cat "$description_file")" = "✅ Работает | wg0: 10.8.0.2" ] ||
   fail "Russian running description did not include the interface address"
 
+# Dual-stack IPv4 + IPv6 description and Simplified Chinese localization
+cat > "$test_bin/ip" <<'EOF'
+#!/bin/sh
+case "$1" in
+  link)
+    [ "$3" = wg0 ]
+    ;;
+  -4)
+    printf '    inet 10.10.10.4/32 scope global wg0\n'
+    ;;
+  -6)
+    printf '    inet6 fe80::1/64 scope link wg0\n'
+    printf '    inet6 fd42:42:42::2/128 scope global wg0\n'
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+EOF
+chmod 755 "$test_bin/ip"
+WGKSU_TEST_SETTINGS_LOCALE=en-US run_status
+[ "$(cat "$description_file")" = "✅ Running | wg0: 10.10.10.4, fd42:42:42::2" ] ||
+  fail "Dual-stack description did not include both IPv4 and IPv6: $(cat "$description_file")"
+WGKSU_TEST_SETTINGS_LOCALE=zh-CN run_status
+[ "$(cat "$description_file")" = "✅ 运行中 | wg0: 10.10.10.4, fd42:42:42::2" ] ||
+  fail "Chinese dual-stack description mismatch: $(cat "$description_file")"
+
 status_output=$(WGKSU_TEST_SETTINGS_LOCALE=ru-RU run_wgksu status 2>&1)
 case "$status_output" in
   *"wg0 запущен"* ) ;;

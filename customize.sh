@@ -6,7 +6,7 @@ resolve_install_locale() {
   locale_candidate=$(printf '%s' "$1" | cut -d',' -f1 | tr '_' '-')
   locale_language=$(printf '%s' "$locale_candidate" | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
   case "$locale_language" in
-    en|ru) install_locale="$locale_language"; return 0 ;;
+    en|ru|zh) install_locale="$locale_language"; return 0 ;;
   esac
   return 1
 }
@@ -130,6 +130,18 @@ cp -f "$MODPATH/wgksu" "$MODPATH/system/bin/"
 cp -f "$MODPATH/wg" "$wg_data/wg"
 cp -f "$MODPATH/wgksu" "$wg_data/wgksu"
 chmod 755 "$wg_data/wg" "$wg_data/wgksu"
+if [ -f "$MODPATH/companion/wgksu-status.apk" ]; then
+  cp -f "$MODPATH/companion/wgksu-status.apk" "$wg_data/wgksu-status.apk"
+  chmod 644 "$wg_data/wgksu-status.apk"
+  if command -v pm >/dev/null 2>&1; then
+    pm install -r -g "$wg_data/wgksu-status.apk" >/dev/null 2>&1 || \
+      pm install -r "$wg_data/wgksu-status.apk" >/dev/null 2>&1 || true
+    pm grant com.wireguard.ksu.status android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
+    if command -v appops >/dev/null 2>&1; then
+      appops set com.wireguard.ksu.status POST_NOTIFICATION allow >/dev/null 2>&1 || true
+    fi
+  fi
+fi
 rm -f "$MODPATH/wg" "$MODPATH/wgksu" "$MODPATH/wg0.conf.example"
 
 # permissions

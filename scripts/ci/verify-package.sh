@@ -27,6 +27,8 @@ webroot/locales/ru.json
 webroot/locales/zh-CN.json
 translations/en/strings.sh
 translations/ru/strings.sh
+translations/zh/strings.sh
+companion/wgksu-status.apk
 boot-completed.sh
 customize.sh
 uninstall.sh

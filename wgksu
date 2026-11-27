@@ -481,30 +481,194 @@ route_table_dump() {
   fi
 
   ip "-$family" route show 2>/dev/null
-  for table in wlan0 eth0 rmnet_data0 rmnet_data1 rmnet_data2 rmnet_data3 rmnet_data4 ccmni0 ccmni1; do
+  for table in wlan0 eth0 rmnet0 rmnet1 rmnet2 rmnet3 rmnet4 v4-rmnet0 v4-rmnet1 v4-rmnet2 rmnet_data0 rmnet_data1 rmnet_data2 rmnet_data3 rmnet_data4 v4-rmnet_data0 v4-rmnet_data1 ccmni0 ccmni1 v4-ccmni0 wwan0; do
     ip "-$family" route show table "$table" 2>/dev/null
   done
 }
 
-get_underlay_default_route() {
+get_connectivity_default_iface() {
+  fam="$1"
+  command -v dumpsys >/dev/null 2>&1 || return 0
+  dumpsys connectivity 2>/dev/null | awk -v fam="$fam" '
+    /Active default network:[[:space:]]*[0-9]+/ {
+      line = $0
+      sub(/^.*Active default network:[[:space:]]*/, "", line)
+      sub(/[^0-9].*$/, "", line)
+      def_net = line
+      next
+    }
+    /NetworkAgentInfo\{/ {
+      if ($0 ~ / destroyed / || $0 ~ / lingering/ || $0 ~ / nascent/) next
+      tr = ""
+      if (match($0, /Transports:[[:space:]]*[A-Z_|]+/)) tr = substr($0, RSTART, RLENGTH)
+      if (tr ~ /VPN/ || $0 ~ /type:[[:space:]]*VPN/ || $0 ~ /ni\{VPN/) next
+      if ($0 ~ /Capabilities:/ && $0 !~ /INTERNET/) next
+      if ($0 ~ /Capabilities:/ && $0 !~ /NOT_VPN/) next
+
+      cur_net = ""
+      if (match($0, /network\{[0-9]+\}/)) {
+        cur_net = substr($0, RSTART + 8, RLENGTH - 9)
+      } else if (match($0, /netId:[[:space:]]*[0-9]+/)) {
+        cur_net = substr($0, RSTART, RLENGTH)
+        sub(/^netId:[[:space:]]*/, "", cur_net)
+      }
+
+      ifname = ""
+      if (match($0, /InterfaceName:[[:space:]]*[A-Za-z0-9_.-]+/)) {
+        ifname = substr($0, RSTART, RLENGTH)
+        sub(/^InterfaceName:[[:space:]]*/, "", ifname)
+      }
+      if (ifname == "" || ifname ~ /^(wg|tun|tap|ppp|dummy|lo)/) next
+
+      # On 464XLAT IPv6-only carriers, IPv4 traffic uses stacked v4-<ifname>
+      v4name = ""
+      if (fam == "4" && match($0, /StackedLinks:.*InterfaceName:[[:space:]]*v4-[A-Za-z0-9_.-]+/)) {
+        s = substr($0, RSTART, RLENGTH)
+        sub(/^.*InterfaceName:[[:space:]]*/, "", s)
+        sub(/[^A-Za-z0-9_.-].*$/, "", s)
+        v4name = s
+      }
+      chosen = (v4name != "") ? v4name : ifname
+
+      if (def_net != "" && cur_net == def_net) {
+        exact = chosen
+        exit
+      }
+      if (fallback == "") fallback = chosen
+    }
+    END {
+      if (exact != "") print exact
+      else if (fallback != "") print fallback
+    }
+  '
+}
+
+get_non_internet_ifaces() {
+  command -v dumpsys >/dev/null 2>&1 || return 0
+  dumpsys connectivity 2>/dev/null | awk '
+    /NetworkAgentInfo\{/ {
+      if ($0 ~ / destroyed /) next
+      ifname = ""
+      if (match($0, /InterfaceName:[[:space:]]*[A-Za-z0-9_.-]+/)) {
+        ifname = substr($0, RSTART, RLENGTH)
+        sub(/^InterfaceName:[[:space:]]*/, "", ifname)
+      }
+      if (ifname == "") next
+      if ($0 ~ /Capabilities:/) {
+        if ($0 ~ /INTERNET/ && $0 ~ /NOT_VPN/) inet[ifname] = 1
+        else non_inet[ifname] = 1
+      }
+    }
+    END {
+      out = ""
+      for (d in non_inet) {
+        if (!(d in inet)) out = (out == "" ? d : out "," d)
+      }
+      if (out != "") print out
+    }
+  '
+}
+
+get_android_default_table() {
   family="$1"
-  route_table_dump "$family" | awk '
-    $1 == "default" {
+  # 1. Check Android netd default-network ip rule:
+  #    Android 13-17+: RULE_PRIORITY_DEFAULT_NETWORK = 31000
+  #    Android 9-12:   RULE_PRIORITY_DEFAULT_NETWORK = 22000
+  rule_tbl=$(ip "-$family" rule show 2>/dev/null | awk '
+    {
+      prio = $1
+      sub(/:$/, "", prio)
+      if (prio !~ /^[0-9]+$/) next
+      tbl = ""
+      for (i = 2; i < NF; i++) {
+        if ($i == "lookup") tbl = $(i + 1)
+      }
+      if (tbl == "" || tbl == "main" || tbl == "local" || tbl == "default" || tbl ~ /^(wg|tun|tap|ppp|dummy|lo|legacy_|local_network)/) next
+      if (prio == 31000 || prio == 22000) { exact = tbl; exit }
+      if (prio >= 19000 && prio <= 31999 && $0 ~ /fwmark 0x0\// && fallback == "") fallback = tbl
+    }
+    END {
+      if (exact != "") print exact
+      else if (fallback != "") print fallback
+    }
+  ')
+  if [ -n "$rule_tbl" ]; then
+    printf '%s\n' "$rule_tbl"
+    return 0
+  fi
+
+  # 2. Fallback to ConnectivityService active Internet interface (excludes IMS/VoLTE rmnet!)
+  get_connectivity_default_iface "$family"
+}
+
+parse_default_route_from_lines() {
+  exclude_csv="${1:-}"
+  awk -v ex="$exclude_csv" '
+    BEGIN {
+      if (ex != "") {
+        n = split(ex, arr, ",")
+        for (i = 1; i <= n; i++) if (arr[i] != "") blocked[arr[i]] = 1
+      }
+    }
+    ($1 == "default" || $1 == "0.0.0.0/0" || $1 == "::/0") {
+      if ($0 ~ /(^|[[:space:]])linkdown([[:space:]]|$)/) next;
       dev = ""; via = "";
       for (i = 1; i <= NF; i++) {
         if ($i == "dev") dev = $(i + 1);
         if ($i == "via") via = $(i + 1);
       }
-      if (dev ~ /^(wlan|eth|rmnet|ccmni|usb|rndis)/) {
+      if (dev != "" && !(dev in blocked) && dev !~ /^(wg|tun|tap|ppp|dummy|lo)/ && dev ~ /^(wlan|eth|rmnet|ccmni|v4-rmnet|v4-ccmni|clat|wwan|usb|rndis)/) {
         score = 50;
         if (dev ~ /^wlan/) score = 10;
         else if (dev ~ /^eth/) score = 20;
-        else if (dev ~ /^(rmnet|ccmni)/) score = 30;
+        else if (dev ~ /^(rmnet|ccmni|v4-rmnet|v4-ccmni|clat|wwan)/) score = 30;
         if (via == "") via = "-";
         print score, via, dev;
       }
     }
   ' | sort -n | head -1
+}
+
+get_underlay_default_route() {
+  family="$1"
+
+  # 1. Prefer Android netd active default network table (ip rule 31000 / 22000) or
+  #    ConnectivityService active Internet interface. Never picks carrier IMS/VoLTE rmnet.
+  default_table=$(get_android_default_table "$family")
+  if [ -n "$default_table" ]; then
+    tbl_routes=$(ip "-$family" route show table "$default_table" 2>/dev/null)
+    if [ -n "$tbl_routes" ]; then
+      found=$(printf '%s\n' "$tbl_routes" | parse_default_route_from_lines)
+      if [ -n "$found" ]; then
+        printf '%s\n' "$found"
+        return 0
+      fi
+    fi
+    # Some minimal/mocked ip wrappers only expose table info in `route show table all`
+    all_routes=$(route_table_dump "$family")
+    found=$(printf '%s\n' "$all_routes" | awk -v tbl="$default_table" '
+      index($0, " table " tbl " ") > 0 || $0 ~ (" table " tbl "$") || index($0, " dev " tbl " ") > 0 || $0 ~ (" dev " tbl "$") { print }
+    ' | parse_default_route_from_lines)
+    if [ -n "$found" ]; then
+      printf '%s\n' "$found"
+      return 0
+    fi
+    # If ConnectivityService knows the active Internet dev (e.g. rmnet1) and its table
+    # wasn't dumped yet, verify link is up and use direct dev route if it has an IP.
+    if [ "$family" = "4" ] && ip -4 addr show dev "$default_table" 2>/dev/null | grep -q 'inet '; then
+      printf '30 - %s\n' "$default_table"
+      return 0
+    elif [ "$family" = "6" ] && ip -6 addr show dev "$default_table" scope global 2>/dev/null | grep -q 'inet6 '; then
+      printf '30 - %s\n' "$default_table"
+      return 0
+    fi
+  else
+    all_routes=$(route_table_dump "$family")
+  fi
+
+  # 2. Fallback: scan all tables for a live physical default route, strictly excluding IMS/non-Internet ifaces
+  non_inet=$(get_non_internet_ifaces)
+  printf '%s\n' "$all_routes" | parse_default_route_from_lines "$non_inet"
 }
 
 record_endpoint_route() {
@@ -519,9 +683,14 @@ route_matches_underlay() {
   current="$1"
   via="$2"
   dev="$3"
+  prefix="${4:-}"
 
-  echo "$current" | awk -v want_via="$via" -v want_dev="$dev" '
+  echo "$current" | awk -v want_via="$via" -v want_dev="$dev" -v want_prefix="$prefix" '
     {
+      if (want_prefix != "") {
+        if ($1 == "default" || $1 == "0.0.0.0/0" || $1 == "::/0") next;
+        if ($1 ~ /\// && $1 !~ ("/" want_prefix "$")) next;
+      }
       route_via = "-"; route_dev = "";
       for (i = 1; i <= NF; i++) {
         if ($i == "via") route_via = $(i + 1);
@@ -561,12 +730,13 @@ add_endpoint_route() {
   endpoint_addr="$3"
   routes_tmp="$4"
   quiet_no_route="$5"
-  [ -n "$endpoint_addr" ] || return
+  changed_marker="${6:-}"
+  [ -n "$endpoint_addr" ] || return 0
 
   route=$(get_underlay_default_route "$family")
   if [ -z "$route" ]; then
     [ "$quiet_no_route" = "1" ] || wg_log "$iface" "no IPv${family} physical default route available for endpoint $endpoint_addr"
-    return
+    return 1
   fi
 
   via=$(echo "$route" | awk '{print $2}')
@@ -577,27 +747,54 @@ add_endpoint_route() {
     prefix=32
   fi
 
-  current=$(ip "-$family" route get "$endpoint_addr" 2>/dev/null | head -1)
-  if route_matches_underlay "$current" "$via" "$dev"; then
+  current=$(ip "-$family" route show table main "$endpoint_addr/$prefix" 2>/dev/null | head -1)
+  if [ -n "$current" ] && route_matches_underlay "$current" "$via" "$dev" "$prefix"; then
     record_endpoint_route "$family" "$endpoint_addr" "$routes_tmp"
-    return
+    return 0
   fi
 
   if [ "$via" = "-" ]; then
-    ip "-$family" route replace "$endpoint_addr/$prefix" dev "$dev" 2>>"$log_file" || return
+    ip "-$family" route replace "$endpoint_addr/$prefix" dev "$dev" 2>>"$log_file" || return 1
     wg_log "$iface" "endpoint IPv${family} route $endpoint_addr dev $dev"
+    [ -n "$changed_marker" ] && : > "$changed_marker"
   else
-    ip "-$family" route replace "$endpoint_addr/$prefix" via "$via" dev "$dev" 2>>"$log_file" || return
-    wg_log "$iface" "endpoint IPv${family} route $endpoint_addr via $via dev $dev"
+    if ip "-$family" route replace "$endpoint_addr/$prefix" via "$via" dev "$dev" 2>/dev/null; then
+      wg_log "$iface" "endpoint IPv${family} route $endpoint_addr via $via dev $dev"
+      [ -n "$changed_marker" ] && : > "$changed_marker"
+    elif ip "-$family" route replace "$endpoint_addr/$prefix" via "$via" dev "$dev" onlink 2>/dev/null; then
+      wg_log "$iface" "endpoint IPv${family} route $endpoint_addr via $via dev $dev onlink"
+      [ -n "$changed_marker" ] && : > "$changed_marker"
+    else
+      if [ -n "$current" ] && route_matches_underlay "$current" "-" "$dev" "$prefix"; then
+        record_endpoint_route "$family" "$endpoint_addr" "$routes_tmp"
+        return 0
+      fi
+      ip "-$family" route replace "$endpoint_addr/$prefix" dev "$dev" 2>>"$log_file" || return 1
+      wg_log "$iface" "endpoint IPv${family} route $endpoint_addr dev $dev"
+      [ -n "$changed_marker" ] && : > "$changed_marker"
+    fi
   fi
 
   record_endpoint_route "$family" "$endpoint_addr" "$routes_tmp"
+  return 0
+}
+
+refresh_peer_endpoints_cache() {
+  flush_iface="$1"
+  $WG show "$flush_iface" endpoints 2>/dev/null | while read -r peer_pk peer_ep; do
+    [ -n "$peer_pk" ] || continue
+    [ -n "$peer_ep" ] || continue
+    [ "$peer_ep" = "(none)" ] && continue
+    $WG set "$flush_iface" peer "$peer_pk" endpoint "$peer_ep" 2>>"$log_file" || true
+  done
 }
 
 add_runtime_endpoint_routes() {
   iface="$1"
   routes_tmp="$2"
   quiet_no_route="$3"
+  changed_marker="${4:-}"
+  missing_family_marker="${5:-}"
 
   $WG show "$iface" endpoints 2>/dev/null | while read -r _ endpoint; do
     [ -n "$endpoint" ] || continue
@@ -605,9 +802,13 @@ add_runtime_endpoint_routes() {
 
     endpoint_addr=$(endpoint_host "$endpoint")
     if is_ipv4 "$endpoint_addr"; then
-      add_endpoint_route 4 "$iface" "$endpoint_addr" "$routes_tmp" "$quiet_no_route"
+      if ! add_endpoint_route 4 "$iface" "$endpoint_addr" "$routes_tmp" "$quiet_no_route" "$changed_marker"; then
+        [ -n "$missing_family_marker" ] && : > "$missing_family_marker"
+      fi
     elif is_ipv6 "$endpoint_addr"; then
-      add_endpoint_route 6 "$iface" "$endpoint_addr" "$routes_tmp" "$quiet_no_route"
+      if ! add_endpoint_route 6 "$iface" "$endpoint_addr" "$routes_tmp" "$quiet_no_route" "$changed_marker"; then
+        [ -n "$missing_family_marker" ] && : > "$missing_family_marker"
+      fi
     fi
   done
 }
@@ -627,7 +828,7 @@ refresh_endpoint_routes() {
   fi
 
   grep -i '^[[:space:]]*Endpoint[[:space:]]*=' "$conf" | while IFS= read -r line; do
-    endpoint=$(echo "$line" | sed 's/^[^=]*= *//')
+    endpoint=$(printf '%s\n' "$line" | tr -d '\r' | sed 's/#.*$//; s/^[^=]*=[[:space:]]*//; s/[[:space:]]*$//')
     host=$(endpoint_host "$endpoint")
     if is_ipv4 "$host"; then
       add_endpoint_route 4 "$iface" "$host" "$new_routes"
@@ -656,6 +857,8 @@ refresh_endpoint_routes() {
 
 repair_endpoint_routes() {
   filter="$1"
+  force_refresh="${2:-0}"
+  any_route_changed=0
   for conf in "$wg_data"/*.conf; do
     [ -f "$conf" ] || continue
     iface=$(basename "$conf" .conf)
@@ -664,14 +867,45 @@ repair_endpoint_routes() {
 
     old_routes=$(endpoint_routes_file "$iface")
     new_routes="${old_routes}.tmp"
+    changed_marker="${old_routes}.changed.$$"
+    missing_marker="${old_routes}.missing.$$"
+    rm -f "$changed_marker" "$missing_marker"
+
     acquire_endpoint_routes_lock "$iface" || continue
     mkdir -p "$wg_data"
     : > "$new_routes"
-    add_runtime_endpoint_routes "$iface" "$new_routes" 1
+    add_runtime_endpoint_routes "$iface" "$new_routes" 1 "$changed_marker" "$missing_marker"
     delete_stale_endpoint_routes "$old_routes" "$new_routes"
     mv "$new_routes" "$old_routes"
     release_endpoint_routes_lock
+
+    # When the underlay dev/gateway/IP changes (e.g. Wi-Fi -> mobile data or SIM 1 <-> SIM 2),
+    # clear WireGuard's cached peer endpoint source IP and dst_cache immediately so packets
+    # stop going out with the old interface/carrier source IP.
+    if [ -f "$changed_marker" ] || [ "$force_refresh" = "1" ]; then
+      rm -f "$changed_marker"
+      any_route_changed=1
+      sync_tunnel_mtu "$iface"
+      refresh_peer_endpoints_cache "$iface"
+    fi
+
+    # If the current endpoint's IP family disappeared on the new network (e.g.
+    # IPv4 Wi-Fi -> IPv6-only 5G), re-resolve domain endpoints immediately.
+    if [ -f "$missing_marker" ]; then
+      rm -f "$missing_marker"
+      reresolve_dns "$iface" >/dev/null 2>&1 || true
+    fi
   done
+  sync_policy_rules
+  if [ "$any_route_changed" = "1" ]; then
+    sync_mss_clamping
+    sync_dns_redirect 1
+    revalidate_unvalidated_networks 1 || true
+    sync_status_notification
+  else
+    ensure_dns_redirect_intact
+    any_running && { revalidate_unvalidated_networks 1 || true; }
+  fi
 }
 
 remove_endpoint_routes() {
@@ -697,6 +931,869 @@ remove_endpoint_routes() {
 
 # --- wg-quick replacement for Android (sh-based) ---
 
+extract_interface_field() {
+  conf_path="$1"
+  field_name="$2"
+  awk -v want="$field_name" '
+    {
+      gsub(/\r/, "")
+      sub(/#.*$/, "")
+    }
+    /^[[:space:]]*\[/ {
+      sec = tolower($0)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", sec)
+      in_iface = (sec == "[interface]")
+      next
+    }
+    !in_iface { next }
+    /^[[:space:]]*$/ { next }
+    {
+      eq = index($0, "=")
+      if (eq == 0) next
+      key = tolower(substr($0, 1, eq - 1))
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      if (key != want) next
+      val = substr($0, eq + 1)
+      gsub(/[[:space:]]+/, "", val)
+      if (val == "") next
+      if (out != "") out = out "," val
+      else out = val
+    }
+    END {
+      if (out != "") print out
+    }
+  ' "$conf_path"
+}
+
+has_policy_rule() {
+  family="$1"
+  ip "-$family" rule show 2>/dev/null | awk '
+    $1 == "1:" {
+      for (i = 2; i < NF; i++) {
+        if ($i == "lookup" && $(i + 1) == "main") {
+          found = 1
+          exit
+        }
+      }
+    }
+    END { exit found ? 0 : 1 }
+  '
+}
+
+ensure_policy_rule() {
+  family="$1"
+  has_policy_rule "$family" && return 0
+  ip "-$family" rule add from all lookup main pref 1 2>>"$log_file"
+}
+
+remove_policy_rule() {
+  family="$1"
+  remove_tries=0
+  while has_policy_rule "$family" && [ "$remove_tries" -lt 10 ]; do
+    ip "-$family" rule del from all lookup main pref 1 2>/dev/null || break
+    remove_tries=$((remove_tries + 1))
+  done
+}
+
+iface_uses_family() {
+  check_iface="$1"
+  check_family="$2"
+  if [ "$check_family" = "6" ]; then
+    $WG show "$check_iface" allowed-ips 2>/dev/null | grep -q ':' && return 0
+    ip -6 addr show dev "$check_iface" scope global 2>/dev/null | grep -q 'inet6 ' && return 0
+  else
+    $WG show "$check_iface" allowed-ips 2>/dev/null | grep -Eq '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' && return 0
+    ip -4 addr show dev "$check_iface" 2>/dev/null | grep -q 'inet ' && return 0
+  fi
+  return 1
+}
+
+any_running_uses_family() {
+  check_family="$1"
+  running_ifaces=$($WG show interfaces 2>/dev/null)
+  if [ -n "$running_ifaces" ]; then
+    for running_iface in $running_ifaces; do
+      iface_running "$running_iface" || continue
+      iface_uses_family "$running_iface" "$check_family" && return 0
+    done
+    return 1
+  fi
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    running_iface=$(basename "$conf" .conf)
+    iface_running "$running_iface" || continue
+    iface_uses_family "$running_iface" "$check_family" && return 0
+  done
+  return 1
+}
+
+sync_policy_rules() {
+  if any_running_uses_family 4; then
+    ensure_policy_rule 4
+  else
+    remove_policy_rule 4
+  fi
+
+  if any_running_uses_family 6; then
+    ensure_policy_rule 6
+  else
+    remove_policy_rule 6
+  fi
+}
+
+add_allowed_ip_route() {
+  family="$1"
+  cidr="$2"
+  route_iface="$3"
+  if [ "$cidr" != "0.0.0.0/0" ] && [ "$cidr" != "::/0" ]; then
+    existing=$(ip "-$family" route show table main "$cidr" dev "$route_iface" 2>/dev/null | head -1)
+    if [ -n "$existing" ]; then
+      case "$existing" in
+        default*|0.0.0.0/0*|::/0*) ;;
+        *) return 0 ;;
+      esac
+    fi
+  fi
+  if [ "$family" = "6" ]; then
+    # Use metric 50 so WireGuard IPv6 routes beat default kernel/RA routes (metric 256/512/1024).
+    if ! ip -6 route replace "$cidr" dev "$route_iface" metric 50 2>/dev/null; then
+      ip -6 route replace "$cidr" dev "$route_iface" 2>>"$log_file"
+    fi
+  else
+    ip -4 route replace "$cidr" dev "$route_iface" 2>>"$log_file"
+  fi
+}
+
+add_allowed_ip_routes() {
+  route_iface="$1"
+  $WG show "$route_iface" allowed-ips 2>/dev/null | while read -r _ ips; do
+    for cidr in $ips; do
+      [ "$cidr" = "(none)" ] && continue
+      case "$cidr" in
+        *:*) add_allowed_ip_route 6 "$cidr" "$route_iface" ;;
+        *)   add_allowed_ip_route 4 "$cidr" "$route_iface" ;;
+      esac
+    done
+  done
+}
+
+# --- Android DNS Resolver Cache Flush & Pixel/AOSP Connectivity Revalidation ---
+
+get_android_active_netids() {
+  {
+    if command -v dumpsys >/dev/null 2>&1; then
+      dumpsys connectivity 2>/dev/null | awk '
+        /Active default network:/ {
+          if ($NF ~ /^[0-9]+$/ && ($NF + 0) >= 100) print $NF
+        }
+        /NetworkAgentInfo\{/ && /network\{[0-9]+\}/ {
+          if ($0 ~ / destroyed /) next
+          s = $0
+          sub(/^.*network\{/, "", s)
+          sub(/\}.*$/, "", s)
+          if (s ~ /^[0-9]+$/ && (s + 0) >= 100) print s
+        }
+      '
+    fi
+    { ip -4 rule show 2>/dev/null; ip -6 rule show 2>/dev/null; } | awk '
+      function hex2dec(h,    i, c, v, n) {
+        h = tolower(h)
+        sub(/^0x/, "", h)
+        n = 0
+        for (i = 1; i <= length(h); i++) {
+          c = substr(h, i, 1)
+          v = index("0123456789abcdef", c) - 1
+          if (v < 0) return 0
+          n = n * 16 + v
+        }
+        return n
+      }
+      /fwmark 0x/ {
+        for (i = 1; i <= NF; i++) {
+          if ($i == "fwmark" && (i + 1) <= NF) {
+            m = $(i + 1)
+            sub(/\/.*$/, "", m)
+            d = hex2dec(m) % 65536
+            if (d >= 100 && d < 65000) print d
+          }
+        }
+      }
+    '
+  } | awk 'NF && !seen[$0]++'
+}
+
+get_android_unvalidated_netids() {
+  command -v dumpsys >/dev/null 2>&1 || return 0
+  dumpsys connectivity 2>/dev/null | awk '
+    /NetworkAgentInfo\{/ && /network\{[0-9]+\}/ {
+      if ($0 ~ / destroyed / || $0 ~ / lingering/ || $0 ~ / nascent/) next
+      if ($0 !~ /INTERNET/ || $0 !~ /NOT_VPN/) next
+      tr = ""
+      if (match($0, /Transports:[[:space:]]*[A-Z_|]+/)) tr = substr($0, RSTART, RLENGTH)
+      if (tr ~ /VPN/) next
+      if (tr !~ /(WIFI|CELLULAR|ETHERNET)/ && $0 !~ /type:[[:space:]]*(WIFI|MOBILE|ETHERNET)/ && $0 !~ /ni\{(WIFI|MOBILE|ETHERNET)/) next
+      nc = $0
+      sub(/^.*nc\{/, "", nc)
+      if (nc ~ /(^|[&\[[:space:]])VALIDATED([&\]\[[:space:]]|$)/) next
+      s = $0
+      sub(/^.*network\{/, "", s)
+      sub(/\}.*$/, "", s)
+      if (s ~ /^[0-9]+$/ && (s + 0) >= 100 && !seen[s]++) print s
+    }
+  '
+}
+
+flush_android_dns_cache() {
+  target_netids="${1:-}"
+  if [ -z "$target_netids" ]; then
+    target_netids=$(get_android_active_netids)
+  fi
+  if [ -n "$target_netids" ]; then
+    while IFS= read -r netid; do
+      [ -n "$netid" ] || continue
+      case "$netid" in
+        *[!0-9]*) continue ;;
+      esac
+      # Android 10+ com.android.resolv frozen stable AIDL: IDnsResolver.flushNetworkCache(int netId) = #10
+      if command -v service >/dev/null 2>&1; then
+        service call dnsresolver 10 i32 "$netid" >/dev/null 2>&1 || true
+      fi
+      if command -v ndc >/dev/null 2>&1; then
+        ndc resolver flushnet "$netid" >/dev/null 2>&1 || true
+      fi
+    done <<EOF
+$target_netids
+EOF
+  fi
+  if command -v ndc >/dev/null 2>&1; then
+    ndc resolver flushdefaultif >/dev/null 2>&1 || true
+  fi
+}
+
+revalidate_unvalidated_networks() {
+  quiet_reval="${1:-0}"
+  unval_netids=$(get_android_unvalidated_netids)
+  [ -n "$unval_netids" ] || return 1
+
+  # Wipe any GFW-poisoned or pre-tunnel DNS entries before NetworkMonitor re-probes
+  flush_android_dns_cache "$unval_netids"
+
+  if command -v cmd >/dev/null 2>&1; then
+    reval_list=""
+    while IFS= read -r nid; do
+      [ -n "$nid" ] || continue
+      cmd connectivity reevaluate "$nid" >/dev/null 2>&1 || true
+      if [ -n "$reval_list" ]; then reval_list="${reval_list},${nid}"; else reval_list="$nid"; fi
+    done <<EOF
+$unval_netids
+EOF
+    if [ "$quiet_reval" != "1" ] && [ -n "$reval_list" ]; then
+      wg_log net "triggered connectivity revalidation for unvalidated netId(s): $reval_list"
+    fi
+  fi
+  return 0
+}
+
+# --- Android Captive Portal Probe Preset (fixes Pixel "!" before/without tunnel in China) ---
+
+captive_backup_file="$wg_data/captive_portal.backup"
+
+get_captive_portal_mode() {
+  if ! command -v settings >/dev/null 2>&1; then
+    echo "default"
+    return 0
+  fi
+  cp_mode=$(settings get global captive_portal_mode 2>/dev/null | tr -d '\r\n ')
+  cp_https=$(settings get global captive_portal_https_url 2>/dev/null | tr -d '\r\n ')
+  if [ "$cp_mode" = "0" ]; then
+    echo "ignore"
+    return 0
+  fi
+  case "$cp_https" in
+    *connect.rom.miui.com*|*qualcomm.cn*|*hicloud.com*|*v2ex.co*)
+      echo "cn"
+      return 0
+      ;;
+  esac
+  echo "default"
+}
+
+save_captive_portal_backup() {
+  [ -f "$captive_backup_file" ] && return 0
+  command -v settings >/dev/null 2>&1 || return 0
+  mkdir -p "$wg_data"
+  orig_mode=$(settings get global captive_portal_mode 2>/dev/null | tr -d '\r\n')
+  orig_https=$(settings get global captive_portal_https_url 2>/dev/null | tr -d '\r\n')
+  orig_http=$(settings get global captive_portal_http_url 2>/dev/null | tr -d '\r\n')
+  orig_fb=$(settings get global captive_portal_fallback_url 2>/dev/null | tr -d '\r\n')
+  orig_ofb=$(settings get global captive_portal_other_fallback_urls 2>/dev/null | tr -d '\r\n')
+  printf "ORIG_MODE='%s'\nORIG_HTTPS='%s'\nORIG_HTTP='%s'\nORIG_FB='%s'\nORIG_OFB='%s'\n" \
+    "$orig_mode" "$orig_https" "$orig_http" "$orig_fb" "$orig_ofb" > "$captive_backup_file"
+}
+
+restore_setting_global() {
+  rs_key="$1"
+  rs_val="$2"
+  case "$rs_val" in
+    ""|null) settings delete global "$rs_key" >/dev/null 2>&1 || true ;;
+    *) settings put global "$rs_key" "$rs_val" >/dev/null 2>&1 || true ;;
+  esac
+}
+
+set_captive_portal_mode() {
+  want_cp="$1"
+  command -v settings >/dev/null 2>&1 || { echo "settings command not found" >&2; return 1; }
+  case "$want_cp" in
+    cn)
+      save_captive_portal_backup
+      settings put global captive_portal_mode 1 >/dev/null 2>&1
+      settings put global captive_portal_https_url "https://connect.rom.miui.com/generate_204" >/dev/null 2>&1
+      settings put global captive_portal_http_url "http://connect.rom.miui.com/generate_204" >/dev/null 2>&1
+      settings put global captive_portal_fallback_url "http://connectivitycheck.platform.hicloud.com/generate_204" >/dev/null 2>&1
+      settings put global captive_portal_other_fallback_urls "http://www.qualcomm.cn/generate_204" >/dev/null 2>&1
+      wg_log net "captive portal probe set to cn (connect.rom.miui.com)"
+      ;;
+    ignore)
+      save_captive_portal_backup
+      settings put global captive_portal_mode 0 >/dev/null 2>&1
+      wg_log net "captive portal detection disabled (captive_portal_mode=0)"
+      ;;
+    default)
+      if [ -f "$captive_backup_file" ]; then
+        ORIG_MODE=""
+        ORIG_HTTPS=""
+        ORIG_HTTP=""
+        ORIG_FB=""
+        ORIG_OFB=""
+        # shellcheck disable=SC1090
+        . "$captive_backup_file" 2>/dev/null || true
+        restore_setting_global captive_portal_mode "$ORIG_MODE"
+        restore_setting_global captive_portal_https_url "$ORIG_HTTPS"
+        restore_setting_global captive_portal_http_url "$ORIG_HTTP"
+        restore_setting_global captive_portal_fallback_url "$ORIG_FB"
+        restore_setting_global captive_portal_other_fallback_urls "$ORIG_OFB"
+        rm -f "$captive_backup_file"
+      else
+        settings put global captive_portal_mode 1 >/dev/null 2>&1 || true
+        settings delete global captive_portal_https_url >/dev/null 2>&1 || true
+        settings delete global captive_portal_http_url >/dev/null 2>&1 || true
+        settings delete global captive_portal_fallback_url >/dev/null 2>&1 || true
+        settings delete global captive_portal_other_fallback_urls >/dev/null 2>&1 || true
+      fi
+      wg_log net "captive portal probe restored to system default"
+      ;;
+    *)
+      echo "Usage: wgksu captive-portal {status|default|cn|ignore}" >&2
+      return 1
+      ;;
+  esac
+  revalidate_unvalidated_networks 1 || true
+  return 0
+}
+
+# --- Global Tunnel DNS Redirect (iptables/ip6tables DNAT + SNAT/MASQUERADE) ---
+
+ipt4() {
+  command -v iptables >/dev/null 2>&1 || return 1
+  iptables -w "$@" 2>/dev/null
+}
+
+ipt6() {
+  command -v ip6tables >/dev/null 2>&1 || return 1
+  ip6tables -w "$@" 2>/dev/null
+}
+
+iface_first_ip4() {
+  ip -4 addr show "$1" 2>/dev/null | grep -o 'inet [^ ]*' | head -1 | cut -d' ' -f2 | cut -d/ -f1
+}
+
+iface_first_ip6() {
+  ip -6 addr show dev "$1" 2>/dev/null | awk '
+    /inet6 / {
+      for (i = 1; i <= NF; i++) {
+        if ($i == "inet6" && (i + 1) <= NF) {
+          a = $(i + 1)
+          sub(/\/.*/, "", a)
+          la = tolower(a)
+          if (la !~ /^fe80:/ && a != "::1") {
+            print a
+            exit
+          }
+        }
+      }
+    }
+  '
+}
+
+is_pinned_endpoint_ip() {
+  chk_family="$1"
+  chk_ip="$2"
+  for ep_file in "$wg_data"/endpoint-routes.*; do
+    [ -f "$ep_file" ] || continue
+    case "$ep_file" in
+      *.lock*|*.tmp|*.changed.*|*.missing.*) continue ;;
+    esac
+    grep -qx "${chk_family} ${chk_ip}" "$ep_file" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+add_dns_host_routes() {
+  dns_iface="$1"
+  dns_list="$2"
+  [ -n "$dns_list" ] || return 0
+  printf '%s\n' "$dns_list" | tr ',' '\n' | while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    if is_ipv6 "$d"; then
+      is_pinned_endpoint_ip 6 "$d" && continue
+      if ! ip -6 route replace "$d/128" dev "$dns_iface" metric 50 2>/dev/null; then
+        ip -6 route replace "$d/128" dev "$dns_iface" 2>>"$log_file" || true
+      fi
+    elif is_ipv4 "$d"; then
+      is_pinned_endpoint_ip 4 "$d" && continue
+      ip -4 route replace "$d/32" dev "$dns_iface" 2>>"$log_file" || true
+    fi
+  done
+}
+
+cleanup_dns_iptables_family() {
+  fam="$1"
+  if [ "$fam" = "6" ]; then
+    del_n=0; while [ "$del_n" -lt 16 ] && ipt6 -t nat -D OUTPUT -j WGKSU_DNS; do del_n=$((del_n + 1)); done
+    del_n=0; while [ "$del_n" -lt 16 ] && ipt6 -t nat -D POSTROUTING -j WGKSU_DNS_POST; do del_n=$((del_n + 1)); done
+    ipt6 -t nat -F WGKSU_DNS || true
+    ipt6 -t nat -X WGKSU_DNS || true
+    ipt6 -t nat -F WGKSU_DNS_POST || true
+    ipt6 -t nat -X WGKSU_DNS_POST || true
+    del_n=0; while [ "$del_n" -lt 16 ] && ipt6 -t filter -D OUTPUT -j WGKSU_DNS_BLOCK; do del_n=$((del_n + 1)); done
+    ipt6 -t filter -F WGKSU_DNS_BLOCK || true
+    ipt6 -t filter -X WGKSU_DNS_BLOCK || true
+  else
+    del_n=0; while [ "$del_n" -lt 16 ] && ipt4 -t nat -D OUTPUT -j WGKSU_DNS; do del_n=$((del_n + 1)); done
+    del_n=0; while [ "$del_n" -lt 16 ] && ipt4 -t nat -D POSTROUTING -j WGKSU_DNS_POST; do del_n=$((del_n + 1)); done
+    ipt4 -t nat -F WGKSU_DNS || true
+    ipt4 -t nat -X WGKSU_DNS || true
+    ipt4 -t nat -F WGKSU_DNS_POST || true
+    ipt4 -t nat -X WGKSU_DNS_POST || true
+    del_n=0; while [ "$del_n" -lt 16 ] && ipt4 -t filter -D OUTPUT -j WGKSU_DNS_BLOCK; do del_n=$((del_n + 1)); done
+    ipt4 -t filter -F WGKSU_DNS_BLOCK || true
+    ipt4 -t filter -X WGKSU_DNS_BLOCK || true
+  fi
+}
+
+cleanup_dns_redirect() {
+  cleanup_dns_iptables_family 4
+  cleanup_dns_iptables_family 6
+  rm -f "$wg_data/dns.active"
+}
+
+find_active_dns_targets() {
+  active_dns4=""
+  active_dns4_iface=""
+  active_dns6=""
+  active_dns6_iface=""
+
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    chk_iface=$(basename "$conf" .conf)
+    iface_running "$chk_iface" || continue
+    dns_file="$wg_data/dns.${chk_iface}"
+    if [ -f "$dns_file" ]; then
+      cfg_dns=$(cat "$dns_file" 2>/dev/null)
+    else
+      cfg_dns=$(extract_interface_field "$conf" "dns")
+    fi
+    [ -n "$cfg_dns" ] || continue
+
+    dns_lines=$(printf '%s\n' "$cfg_dns" | tr ',' '\n')
+    while IFS= read -r d; do
+      [ -n "$d" ] || continue
+      if [ -z "$active_dns4" ] && is_ipv4 "$d"; then
+        active_dns4="$d"
+        active_dns4_iface="$chk_iface"
+      elif [ -z "$active_dns6" ] && is_ipv6 "$d"; then
+        active_dns6="$d"
+        active_dns6_iface="$chk_iface"
+      fi
+    done <<EOF
+$dns_lines
+EOF
+  done
+}
+
+sync_dns_redirect() {
+  quiet_log="${1:-0}"
+  find_active_dns_targets
+  cleanup_dns_iptables_family 4
+  cleanup_dns_iptables_family 6
+
+  if [ -z "$active_dns4" ] && [ -z "$active_dns6" ]; then
+    rm -f "$wg_data/dns.active"
+    return 0
+  fi
+
+  # Ensure remote DNS servers themselves always route through their WireGuard interface
+  [ -n "$active_dns4" ] && add_dns_host_routes "$active_dns4_iface" "$active_dns4"
+  [ -n "$active_dns6" ] && add_dns_host_routes "$active_dns6_iface" "$active_dns6"
+
+  private_dns_mode=""
+  if command -v settings >/dev/null 2>&1; then
+    private_dns_mode=$(settings get global private_dns_mode 2>/dev/null | tr -d '\r\n ')
+  fi
+  dot_guard=0
+  [ "$private_dns_mode" != "hostname" ] && dot_guard=1
+
+  v4_nat_ok=0
+  v6_mode="off"
+
+  # --- IPv4 DNS redirect ---
+  if [ -n "$active_dns4" ]; then
+    if ipt4 -t nat -N WGKSU_DNS && ipt4 -t nat -N WGKSU_DNS_POST; then
+      ipt4 -t nat -A WGKSU_DNS -d 127.0.0.0/8 -j RETURN
+      ipt4 -t nat -A WGKSU_DNS -o lo -j RETURN
+      for ep_file in "$wg_data"/endpoint-routes.*; do
+        [ -f "$ep_file" ] || continue
+        case "$ep_file" in *.lock*|*.tmp|*.changed.*|*.missing.*) continue ;; esac
+        while read -r ef ea; do
+          [ "$ef" = "4" ] && [ -n "$ea" ] && ipt4 -t nat -A WGKSU_DNS -d "${ea}/32" -j RETURN
+        done < "$ep_file"
+      done
+      ipt4 -t nat -A WGKSU_DNS -p udp --dport 53 -j DNAT --to-destination "${active_dns4}:53"
+      ipt4 -t nat -A WGKSU_DNS -p tcp --dport 53 -j DNAT --to-destination "${active_dns4}:53"
+
+      wg_ip4=$(iface_first_ip4 "$active_dns4_iface")
+      if [ -n "$wg_ip4" ]; then
+        ipt4 -t nat -A WGKSU_DNS_POST -o "$active_dns4_iface" -p udp --dport 53 -j SNAT --to-source "$wg_ip4" || \
+          ipt4 -t nat -A WGKSU_DNS_POST -o "$active_dns4_iface" -p udp --dport 53 -j MASQUERADE || true
+        ipt4 -t nat -A WGKSU_DNS_POST -o "$active_dns4_iface" -p tcp --dport 53 -j SNAT --to-source "$wg_ip4" || \
+          ipt4 -t nat -A WGKSU_DNS_POST -o "$active_dns4_iface" -p tcp --dport 53 -j MASQUERADE || true
+      else
+        ipt4 -t nat -A WGKSU_DNS_POST -o "$active_dns4_iface" -p udp --dport 53 -j MASQUERADE || true
+        ipt4 -t nat -A WGKSU_DNS_POST -o "$active_dns4_iface" -p tcp --dport 53 -j MASQUERADE || true
+      fi
+
+      if ipt4 -t nat -I OUTPUT 1 -j WGKSU_DNS && ipt4 -t nat -I POSTROUTING 1 -j WGKSU_DNS_POST; then
+        v4_nat_ok=1
+      fi
+    fi
+
+    if [ "$dot_guard" = "1" ] && ipt4 -t filter -N WGKSU_DNS_BLOCK; then
+      ipt4 -t filter -A WGKSU_DNS_BLOCK -d 127.0.0.0/8 -j RETURN
+      ipt4 -t filter -A WGKSU_DNS_BLOCK -o lo -j RETURN
+      ipt4 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 853 -j REJECT --reject-with tcp-reset || \
+        ipt4 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 853 -j REJECT || \
+        ipt4 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 853 -j DROP || true
+      ipt4 -t filter -I OUTPUT 1 -j WGKSU_DNS_BLOCK || true
+    fi
+  elif [ -n "$active_dns6" ]; then
+    # IPv6-only DNS configured: reject IPv4 port 53 so netd immediately uses IPv6 DNS
+    if ipt4 -t filter -N WGKSU_DNS_BLOCK; then
+      ipt4 -t filter -A WGKSU_DNS_BLOCK -d 127.0.0.0/8 -j RETURN
+      ipt4 -t filter -A WGKSU_DNS_BLOCK -o lo -j RETURN
+      ipt4 -t filter -A WGKSU_DNS_BLOCK -p udp --dport 53 -j REJECT || ipt4 -t filter -A WGKSU_DNS_BLOCK -p udp --dport 53 -j DROP || true
+      ipt4 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 53 -j REJECT || ipt4 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 53 -j DROP || true
+      if [ "$dot_guard" = "1" ]; then
+        ipt4 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 853 -j REJECT || ipt4 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 853 -j DROP || true
+      fi
+      ipt4 -t filter -I OUTPUT 1 -j WGKSU_DNS_BLOCK || true
+    fi
+  fi
+
+  # --- IPv6 DNS redirect (or leak block when only IPv4 DNS is configured) ---
+  if [ -n "$active_dns6" ]; then
+    if ipt6 -t nat -N WGKSU_DNS && ipt6 -t nat -N WGKSU_DNS_POST; then
+      ipt6 -t nat -A WGKSU_DNS -d ::1/128 -j RETURN
+      ipt6 -t nat -A WGKSU_DNS -o lo -j RETURN
+      ipt6 -t nat -A WGKSU_DNS -d fe80::/10 -j RETURN
+      for ep_file in "$wg_data"/endpoint-routes.*; do
+        [ -f "$ep_file" ] || continue
+        case "$ep_file" in *.lock*|*.tmp|*.changed.*|*.missing.*) continue ;; esac
+        while read -r ef ea; do
+          [ "$ef" = "6" ] && [ -n "$ea" ] && ipt6 -t nat -A WGKSU_DNS -d "${ea}/128" -j RETURN
+        done < "$ep_file"
+      done
+      ipt6 -t nat -A WGKSU_DNS -p udp --dport 53 -j DNAT --to-destination "[${active_dns6}]:53"
+      ipt6 -t nat -A WGKSU_DNS -p tcp --dport 53 -j DNAT --to-destination "[${active_dns6}]:53"
+
+      wg_ip6=$(iface_first_ip6 "$active_dns6_iface")
+      if [ -n "$wg_ip6" ]; then
+        ipt6 -t nat -A WGKSU_DNS_POST -o "$active_dns6_iface" -p udp --dport 53 -j SNAT --to-source "$wg_ip6" || \
+          ipt6 -t nat -A WGKSU_DNS_POST -o "$active_dns6_iface" -p udp --dport 53 -j MASQUERADE || true
+        ipt6 -t nat -A WGKSU_DNS_POST -o "$active_dns6_iface" -p tcp --dport 53 -j SNAT --to-source "$wg_ip6" || \
+          ipt6 -t nat -A WGKSU_DNS_POST -o "$active_dns6_iface" -p tcp --dport 53 -j MASQUERADE || true
+      else
+        ipt6 -t nat -A WGKSU_DNS_POST -o "$active_dns6_iface" -p udp --dport 53 -j MASQUERADE || true
+        ipt6 -t nat -A WGKSU_DNS_POST -o "$active_dns6_iface" -p tcp --dport 53 -j MASQUERADE || true
+      fi
+
+      if ipt6 -t nat -I OUTPUT 1 -j WGKSU_DNS && ipt6 -t nat -I POSTROUTING 1 -j WGKSU_DNS_POST; then
+        v6_mode="nat"
+      fi
+    fi
+
+    if [ "$v6_mode" = "nat" ]; then
+      # Reject link-local IPv6 DNS (fe80::1%wlan0) and opportunistic DoT 853
+      if ipt6 -t filter -N WGKSU_DNS_BLOCK; then
+        ipt6 -t filter -A WGKSU_DNS_BLOCK -d ::1/128 -j RETURN
+        ipt6 -t filter -A WGKSU_DNS_BLOCK -o lo -j RETURN
+        ipt6 -t filter -A WGKSU_DNS_BLOCK -d fe80::/10 -p udp --dport 53 -j REJECT || ipt6 -t filter -A WGKSU_DNS_BLOCK -d fe80::/10 -p udp --dport 53 -j DROP || true
+        ipt6 -t filter -A WGKSU_DNS_BLOCK -d fe80::/10 -p tcp --dport 53 -j REJECT || ipt6 -t filter -A WGKSU_DNS_BLOCK -d fe80::/10 -p tcp --dport 53 -j DROP || true
+        if [ "$dot_guard" = "1" ]; then
+          ipt6 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 853 -j REJECT || ipt6 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 853 -j DROP || true
+        fi
+        ipt6 -t filter -I OUTPUT 1 -j WGKSU_DNS_BLOCK || true
+      fi
+    fi
+  fi
+
+  # If only IPv4 DNS is configured (or kernel lacks ip6tables nat), reject IPv6 port 53
+  # so Android netd immediately falls back to IPv4 DNS -> redirected through the tunnel!
+  if [ "$v6_mode" != "nat" ] && [ -n "$active_dns4" ]; then
+    if ipt6 -t filter -N WGKSU_DNS_BLOCK; then
+      ipt6 -t filter -A WGKSU_DNS_BLOCK -d ::1/128 -j RETURN
+      ipt6 -t filter -A WGKSU_DNS_BLOCK -o lo -j RETURN
+      ipt6 -t filter -A WGKSU_DNS_BLOCK -p udp --dport 53 -j REJECT || ipt6 -t filter -A WGKSU_DNS_BLOCK -p udp --dport 53 -j DROP || true
+      ipt6 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 53 -j REJECT || ipt6 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 53 -j DROP || true
+      if [ "$dot_guard" = "1" ]; then
+        ipt6 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 853 -j REJECT || ipt6 -t filter -A WGKSU_DNS_BLOCK -p tcp --dport 853 -j DROP || true
+      fi
+      if ipt6 -t filter -I OUTPUT 1 -j WGKSU_DNS_BLOCK; then
+        v6_mode="block"
+      fi
+    fi
+  fi
+
+  # Flush Android DNS resolver cache (Android 10+ dnsresolver AIDL + legacy ndc)
+  flush_android_dns_cache
+
+  mkdir -p "$wg_data"
+  printf 'DNS4=%s\nDNS6=%s\nDNS4_IFACE=%s\nDNS6_IFACE=%s\nV4_NAT=%s\nV6_MODE=%s\nDOT_GUARD=%s\n' \
+    "$active_dns4" "$active_dns6" "$active_dns4_iface" "$active_dns6_iface" "$v4_nat_ok" "$v6_mode" "$dot_guard" \
+    > "$wg_data/dns.active"
+
+  if [ "$quiet_log" != "1" ]; then
+    wg_log "${active_dns4_iface:-${active_dns6_iface:-dns}}" \
+      "global DNS redirect active (v4=${active_dns4:-none}[nat=${v4_nat_ok}], v6=${active_dns6:-none}[mode=${v6_mode}], dot_guard=${dot_guard})"
+  fi
+  return 0
+}
+
+ensure_dns_redirect_intact() {
+  find_active_dns_targets
+  if [ -z "$active_dns4" ] && [ -z "$active_dns6" ]; then
+    if [ -f "$wg_data/dns.active" ]; then
+      cleanup_dns_redirect
+    fi
+    return 0
+  fi
+
+  need_reapply=0
+  if [ -n "$active_dns4" ]; then
+    ipt4 -t nat -C OUTPUT -j WGKSU_DNS || need_reapply=1
+    ipt4 -t nat -C POSTROUTING -j WGKSU_DNS_POST || need_reapply=1
+  fi
+  if [ -n "$active_dns6" ]; then
+    ipt6 -t nat -C OUTPUT -j WGKSU_DNS || ipt6 -t filter -C OUTPUT -j WGKSU_DNS_BLOCK || need_reapply=1
+  elif [ -n "$active_dns4" ]; then
+    ipt6 -t filter -C OUTPUT -j WGKSU_DNS_BLOCK || need_reapply=1
+  fi
+
+  if [ "$need_reapply" = "1" ]; then
+    sync_dns_redirect 1
+  else
+    [ -n "$active_dns4" ] && add_dns_host_routes "$active_dns4_iface" "$active_dns4"
+    [ -n "$active_dns6" ] && add_dns_host_routes "$active_dns6_iface" "$active_dns6"
+  fi
+}
+
+print_dns_status() {
+  find_active_dns_targets
+  v4_live=0
+  v6_mode="off"
+  dot_live=0
+  if [ -n "$active_dns4" ] && ipt4 -t nat -C OUTPUT -j WGKSU_DNS && ipt4 -t nat -C POSTROUTING -j WGKSU_DNS_POST; then
+    v4_live=1
+  fi
+  if ipt6 -t nat -C OUTPUT -j WGKSU_DNS && ipt6 -t nat -C POSTROUTING -j WGKSU_DNS_POST; then
+    v6_mode="nat"
+  elif ipt6 -t filter -C OUTPUT -j WGKSU_DNS_BLOCK; then
+    v6_mode="block"
+  fi
+  if ipt4 -t filter -C OUTPUT -j WGKSU_DNS_BLOCK || ipt6 -t filter -C OUTPUT -j WGKSU_DNS_BLOCK; then
+    dot_live=1
+  fi
+  printf 'DNS4=%s\nDNS6=%s\nDNS4_IFACE=%s\nDNS6_IFACE=%s\nV4_NAT=%s\nV6_MODE=%s\nDOT_GUARD=%s\n' \
+    "$active_dns4" "$active_dns6" "$active_dns4_iface" "$active_dns6_iface" "$v4_live" "$v6_mode" "$dot_live"
+}
+
+
+# --- Underlay-Aware Tunnel MTU & TCP MSS Clamping (prevents cellular HTTPS PMTU blackholes) ---
+
+get_underlay_effective_mtu() {
+  min_mtu=1500
+  is_cellular_underlay=0
+
+  for fam in 4 6; do
+    u_route=$(get_underlay_default_route "$fam")
+    [ -n "$u_route" ] || continue
+    u_dev=$(printf '%s\n' "$u_route" | awk '{print $3}')
+    case "$u_dev" in
+      rmnet*|ccmni*|v4-rmnet*|v4-ccmni*|clat*|wwan*) is_cellular_underlay=1 ;;
+    esac
+    if [ -r "/sys/class/net/$u_dev/mtu" ]; then
+      dev_mtu=$(cat "/sys/class/net/$u_dev/mtu" 2>/dev/null)
+      case "$dev_mtu" in
+        *[!0-9]*|"") ;;
+        *) [ "$dev_mtu" -ge 1280 ] && [ "$dev_mtu" -lt "$min_mtu" ] && min_mtu="$dev_mtu" ;;
+      esac
+    fi
+    u_tbl=$(get_android_default_table "$fam")
+    if [ -n "$u_tbl" ]; then
+      rt_mtu=$(ip "-$fam" route show table "$u_tbl" 2>/dev/null | awk '
+        ($1 == "default" || $1 == "0.0.0.0/0" || $1 == "::/0") {
+          for (i = 1; i < NF; i++) {
+            if ($i == "mtu" && $(i + 1) ~ /^[0-9]+$/) {
+              m = $(i + 1) + 0
+              if (m >= 1280 && (best == 0 || m < best)) best = m
+            }
+          }
+        }
+        END { if (best > 0) print best }
+      ')
+      case "$rt_mtu" in
+        *[!0-9]*|"") ;;
+        *) [ "$rt_mtu" -lt "$min_mtu" ] && min_mtu="$rt_mtu" ;;
+      esac
+    fi
+  done
+
+  # Also inspect dumpsys connectivity for explicit per-route cellular MTUs (e.g. rmnet1 mtu 1432)
+  if [ "$is_cellular_underlay" = "1" ] && command -v dumpsys >/dev/null 2>&1; then
+    ds_mtu=$(dumpsys connectivity 2>/dev/null | awk '
+      /NetworkAgentInfo\{/ && /INTERNET/ && /NOT_VPN/ && /CELLULAR/ {
+        if ($0 ~ / destroyed / || $0 ~ / lingering/) next
+        line = $0
+        while (match(line, /mtu [0-9]+/)) {
+          tok = substr(line, RSTART + 4, RLENGTH - 4) + 0
+          if (tok >= 1280 && (best == 0 || tok < best)) best = tok
+          line = substr(line, RSTART + RLENGTH)
+        }
+      }
+      END { if (best > 0) print best }
+    ')
+    case "$ds_mtu" in
+      *[!0-9]*|"") ;;
+      *) [ "$ds_mtu" -lt "$min_mtu" ] && min_mtu="$ds_mtu" ;;
+    esac
+  fi
+
+  # Cellular carriers (LTE/5G GTP-U / IPv6) commonly cap usable path MTU at <= 1432
+  if [ "$is_cellular_underlay" = "1" ] && [ "$min_mtu" -gt 1432 ]; then
+    min_mtu=1432
+  fi
+
+  # Subtract 80 bytes (WireGuard over IPv6 encapsulation overhead; safely covers IPv4 60B too)
+  eff_mtu=$((min_mtu - 80))
+  [ "$eff_mtu" -lt 1280 ] && eff_mtu=1280
+  echo "$eff_mtu"
+}
+
+sync_tunnel_mtu() {
+  mtu_iface="$1"
+  cfg_mtu="${2:-}"
+  if [ -z "$cfg_mtu" ] && [ -f "$wg_data/mtu.${mtu_iface}" ]; then
+    cfg_mtu=$(cat "$wg_data/mtu.${mtu_iface}" 2>/dev/null)
+  fi
+  case "$cfg_mtu" in
+    *[!0-9]*|"") cfg_mtu=1420 ;;
+  esac
+  [ "$cfg_mtu" -lt 1280 ] && cfg_mtu=1280
+
+  eff_mtu=$(get_underlay_effective_mtu)
+  target_mtu="$cfg_mtu"
+  if [ -n "$eff_mtu" ] && [ "$eff_mtu" -lt "$target_mtu" ]; then
+    target_mtu="$eff_mtu"
+  fi
+  ip link set "$mtu_iface" mtu "$target_mtu" 2>>"$log_file" || true
+  if [ "$target_mtu" != "$cfg_mtu" ]; then
+    wg_log "$mtu_iface" "adjusted tunnel MTU to $target_mtu (configured $cfg_mtu, underlay safe MTU $eff_mtu)"
+  fi
+}
+
+cleanup_mss_clamping_family() {
+  if [ "$1" = "6" ]; then
+    del_n=0; while [ "$del_n" -lt 16 ] && ipt6 -t mangle -D POSTROUTING -j WGKSU_MSS; do del_n=$((del_n + 1)); done
+    ipt6 -t mangle -F WGKSU_MSS || true
+    ipt6 -t mangle -X WGKSU_MSS || true
+  else
+    del_n=0; while [ "$del_n" -lt 16 ] && ipt4 -t mangle -D POSTROUTING -j WGKSU_MSS; do del_n=$((del_n + 1)); done
+    ipt4 -t mangle -F WGKSU_MSS || true
+    ipt4 -t mangle -X WGKSU_MSS || true
+  fi
+}
+
+sync_mss_clamping() {
+  cleanup_mss_clamping_family 4
+  cleanup_mss_clamping_family 6
+
+  running_mss=""
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    m_iface=$(basename "$conf" .conf)
+    iface_running "$m_iface" || continue
+    running_mss="${running_mss}${m_iface}
+"
+  done
+  [ -n "$running_mss" ] || return 0
+
+  if ipt4 -t mangle -N WGKSU_MSS; then
+    while IFS= read -r m_iface; do
+      [ -n "$m_iface" ] || continue
+      ipt4 -t mangle -A WGKSU_MSS -o "$m_iface" -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu || true
+    done <<EOF
+$running_mss
+EOF
+    ipt4 -t mangle -I POSTROUTING 1 -j WGKSU_MSS || true
+  fi
+
+  if ipt6 -t mangle -N WGKSU_MSS; then
+    while IFS= read -r m_iface; do
+      [ -n "$m_iface" ] || continue
+      ipt6 -t mangle -A WGKSU_MSS -o "$m_iface" -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu || true
+    done <<EOF
+$running_mss
+EOF
+    ipt6 -t mangle -I POSTROUTING 1 -j WGKSU_MSS || true
+  fi
+}
+
+check_autotunnel_start_guard() {
+  [ "${autotunnel_guard_checked:-0}" = "1" ] && return 0
+  guard_iface="$1"
+  guard_conf="$wg_data/autotunnel.${guard_iface}"
+  [ -f "$guard_conf" ] || return 0
+
+  AUTOTUNNEL_ENABLED=0
+  # shellcheck disable=SC1090
+  . "$guard_conf" 2>/dev/null
+  [ "${AUTOTUNNEL_ENABLED:-0}" = "1" ] || return 0
+
+  detect_network_state
+  guard_decision=$(eval_autotunnel_decision "$guard_iface" "$net_transport" "$net_wifi_ssid" "$net_sim_slot")
+  [ "$guard_decision" = "stop" ] || return 0
+
+  if [ "$net_transport" = "wifi" ]; then
+    guard_label="Wi-Fi: ${net_wifi_ssid:-unknown}"
+  elif [ "$net_transport" = "mobile" ]; then
+    guard_label="mobile:${net_sim_slot}"
+  else
+    guard_label="$net_transport"
+  fi
+  wg_log "$guard_iface" "refusing start: blocked by auto-tunnel rule ($guard_label)"
+  printf '%s (%s: %s)\n' "${msg_error_autotunnel_blocked:-Refused to start: blocked by Auto-Tunnel rule}" "$guard_iface" "$guard_label" >&2
+  return 2
+}
+
 # parse a .conf file and extract Interface/Peer sections
 wg_up() {
   load_status_strings
@@ -712,6 +1809,9 @@ wg_up() {
     echo "$msg_error_config_not_found$conf"
     return 1
   fi
+
+  # Enforce Auto-Tunnel deny rules (e.g. blacklisted Wi-Fi, non-whitelisted Wi-Fi, or disabled SIM)
+  check_autotunnel_start_guard "$iface" || return $?
 
   # basic config validation
   if ! grep -qi '^[[:space:]]*\[Interface\]' "$conf"; then
@@ -732,10 +1832,11 @@ wg_up() {
   fi
   require_endpoint_routes_lock "$iface" || return 1
 
-  # extract Interface fields
-  address=$(grep -i '^[[:space:]]*Address' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
-  dns=$(grep -i '^[[:space:]]*DNS' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
-  mtu=$(grep -i '^[[:space:]]*MTU' "$conf" | sed 's/^[^=]*= *//' | tr -d ' ')
+  # extract Interface fields (handles CRLF, multiple lines, tabs, inline comments)
+  address=$(extract_interface_field "$conf" "address")
+  dns=$(extract_interface_field "$conf" "dns")
+  mtu=$(extract_interface_field "$conf" "mtu")
+  mtu="${mtu##*,}"
 
   # create interface
   if ! ip link add "$iface" type wireguard 2>>"$log_file"; then
@@ -745,7 +1846,10 @@ wg_up() {
   fi
 
   # apply wg config (strip Interface-only fields, pass to wg setconf)
-  tmpconf="/tmp/wg_${iface}.conf"
+  mkdir -p "$wg_data"
+  tmpconf="$wg_data/.wg_${iface}.conf.$$"
+  : > "$tmpconf"
+  chmod 600 "$tmpconf" 2>/dev/null || true
   # Backslash continuations below are part of the single-quoted awk program.
   # shellcheck disable=SC1004
   awk '
@@ -767,7 +1871,7 @@ wg_up() {
   while IFS= read -r line; do
     case "$line" in
       *[Ee]ndpoint*=*)
-        ep=$(echo "$line" | sed 's/^[^=]*= *//')
+        ep=$(printf '%s\n' "$line" | sed 's/#.*$//; s/^[^=]*=[[:space:]]*//; s/[[:space:]]*$//')
         host=$(endpoint_host "$ep")
         port=$(endpoint_port "$ep")
         if ! is_ipv4 "$host" && ! is_ipv6 "$host"; then
@@ -780,6 +1884,7 @@ wg_up() {
     esac
     printf '%s\n' "$line"
   done < "$tmpconf" > "${tmpconf}.resolved"
+  chmod 600 "${tmpconf}.resolved" 2>/dev/null || true
   mv "${tmpconf}.resolved" "$tmpconf"
 
   if ! refresh_endpoint_routes "$tmpconf" "$iface"; then
@@ -798,50 +1903,87 @@ wg_up() {
     wg_log "$iface" "wg setconf failed"
     echo "$msg_error_wg_setconf$iface"
     ip link del "$iface" 2>/dev/null
+    remove_endpoint_routes "$iface"
     return 1
   fi
 
-  # set addresses
-  IFS=','
-  for addr in $address; do
-    addr=$(echo "$addr" | tr -d ' ')
-    [ -n "$addr" ] && ip addr add "$addr" dev "$iface" 2>>"$log_file"
-  done
-  unset IFS
-
-  # set MTU
-  [ -n "$mtu" ] && ip link set "$iface" mtu "$mtu"
-  [ -z "$mtu" ] && ip link set "$iface" mtu 1420
-
-  # bring up
-  ip link set "$iface" up
-
-  # add routes for AllowedIPs
-  $WG show "$iface" allowed-ips 2>/dev/null | while read -r _ ips; do
-    for cidr in $ips; do
-      [ "$cidr" = "(none)" ] && continue
-      case "$cidr" in
-        *:*) ip -6 route add "$cidr" dev "$iface" 2>/dev/null ;;
-        *)   ip -4 route add "$cidr" dev "$iface" 2>/dev/null ;;
-      esac
-    done
-  done
-
-  # DNS (set system property for Android)
-  if [ -n "$dns" ]; then
-    i=1
-    IFS=','
-    for d in $dns; do
-      d=$(echo "$d" | tr -d ' ')
-      ndc resolver setnetdns "$iface" "" "$d" >/dev/null 2>&1 || \
-        setprop net.dns${i} "$d" 2>/dev/null
-      i=$((i + 1))
-    done
-    unset IFS
+  # ensure IPv6 is enabled on this interface when IPv6 addresses or AllowedIPs are configured
+  iface_has_v6_config=0
+  case "$address" in
+    *:*) iface_has_v6_config=1 ;;
+  esac
+  if [ "$iface_has_v6_config" = "0" ] && $WG show "$iface" allowed-ips 2>/dev/null | grep -q ':'; then
+    iface_has_v6_config=1
+  fi
+  if [ "$iface_has_v6_config" = "1" ]; then
+    if [ -w "/proc/sys/net/ipv6/conf/$iface/disable_ipv6" ]; then
+      echo 0 > "/proc/sys/net/ipv6/conf/$iface/disable_ipv6" 2>/dev/null || true
+    fi
+    if [ -r /proc/sys/net/ipv6/conf/all/disable_ipv6 ] && [ "$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null)" = "1" ]; then
+      wg_log "$iface" "warning: /proc/sys/net/ipv6/conf/all/disable_ipv6 is 1; IPv6 may be disabled by kernel"
+    fi
   fi
 
-  # routing policy
-  ip rule add from all lookup main pref 1 2>/dev/null
+  # set underlay-aware MTU before configuring addresses and bringing up the link
+  if [ -n "$mtu" ]; then
+    printf '%s\n' "$mtu" > "$wg_data/mtu.${iface}"
+  else
+    printf '1420\n' > "$wg_data/mtu.${iface}"
+  fi
+  sync_tunnel_mtu "$iface" "$mtu"
+
+  # set addresses (IPv4 and IPv6)
+  if [ -n "$address" ]; then
+    printf '%s\n' "$address" | tr ',' '\n' | while IFS= read -r addr; do
+      [ -n "$addr" ] || continue
+      case "$addr" in
+        *:*) ip -6 addr add "$addr" dev "$iface" 2>>"$log_file" ;;
+        *)   ip -4 addr add "$addr" dev "$iface" 2>>"$log_file" ;;
+      esac
+    done
+  fi
+
+  # loose reverse-path filtering on tunnel interface avoids false drops with Android policy routing
+  if [ -w "/proc/sys/net/ipv4/conf/$iface/rp_filter" ]; then
+    echo 2 > "/proc/sys/net/ipv4/conf/$iface/rp_filter" 2>/dev/null || true
+  fi
+
+  # bring up
+  ip link set "$iface" up 2>>"$log_file"
+
+  # add routes for AllowedIPs (IPv4 and IPv6)
+  add_allowed_ip_routes "$iface"
+
+  # DNS (legacy system property + global iptables/ip6tables tunnel DNS redirect)
+  if [ -n "$dns" ]; then
+    printf '%s\n' "$dns" > "$wg_data/dns.${iface}"
+    printf '%s\n' "$dns" | tr ',' '\n' | {
+      i=1
+      while IFS= read -r d; do
+        [ -n "$d" ] || continue
+        ndc resolver setnetdns "$iface" "" "$d" >/dev/null 2>&1 || \
+          setprop "net.dns${i}" "$d" 2>/dev/null
+        i=$((i + 1))
+      done
+    }
+  else
+    rm -f "$wg_data/dns.${iface}"
+  fi
+
+  # routing policy (IPv4 and IPv6, idempotent across multiple interfaces)
+  sync_policy_rules
+
+  # clamp TCP MSS on tunnel interfaces to prevent TLS/HTTPS PMTU blackholes on cellular links
+  sync_mss_clamping
+
+  # enforce global DNS through the tunnel when DNS = is configured
+  sync_dns_redirect 0
+
+  # clear any manual-stop auto-tunnel pause once user starts the tunnel
+  set_manual_pause "$iface" 0
+
+  # clear Pixel/Android "No Internet" (!) state if NetworkMonitor failed before tunnel came up
+  revalidate_unvalidated_networks 0 || true
 
   echo "$iface$msg_iface_up"
 }
@@ -851,14 +1993,20 @@ wg_down() {
   iface="$1"
 
   if ! ip link show "$iface" >/dev/null 2>&1; then
+    rm -f "$wg_data/dns.${iface}" "$wg_data/mtu.${iface}"
+    sync_mss_clamping
+    sync_dns_redirect 1
     echo "$iface$msg_iface_not_up"
     return
   fi
 
+  rm -f "$wg_data/dns.${iface}" "$wg_data/mtu.${iface}"
   ip link set "$iface" down 2>/dev/null
   ip link del "$iface" 2>/dev/null
   remove_endpoint_routes "$iface"
-  ip rule del from all lookup main pref 1 2>/dev/null
+  sync_policy_rules
+  sync_mss_clamping
+  sync_dns_redirect 1
 
   echo "$iface$msg_iface_down"
 }
@@ -888,7 +2036,7 @@ resolve_status_locale() {
   locale_candidate=$(printf '%s' "$1" | cut -d',' -f1 | tr '_' '-')
   locale_language=$(printf '%s' "$locale_candidate" | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
   case "$locale_language" in
-    en|ru) status_locale="$locale_language"; return 0 ;;
+    en|ru|zh) status_locale="$locale_language"; return 0 ;;
   esac
   return 1
 }
@@ -920,26 +2068,53 @@ load_status_strings() {
   status_locale_loaded=1
 }
 
-# --- update KSU description ---
+# --- update KSU description & Pixel status bar notification ---
 update_desc() {
-  command -v ksud >/dev/null 2>&1 || return
   load_status_strings
-  export KSU_MODULE="WireGuard-KSU"
-  if any_running; then
-    desc=""
-    for conf in "$wg_data"/*.conf; do
-      [ -f "$conf" ] || continue
-      iface=$(basename "$conf" .conf)
-      if iface_running "$iface"; then
-        ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [^ ]*' | head -1 | cut -d' ' -f2 | cut -d/ -f1)
-        if [ -n "$desc" ]; then desc="$desc | "; fi
-        desc="${desc}${iface}: ${ip:-?}"
-      fi
-    done
-    ksud module config set override.description "✅ ${status_running} | ${desc}" 2>/dev/null
-  else
-    ksud module config set override.description "⏹ ${status_stopped}" 2>/dev/null
+  if command -v ksud >/dev/null 2>&1; then
+    export KSU_MODULE="WireGuard-KSU"
+    if any_running; then
+      desc=""
+      for conf in "$wg_data"/*.conf; do
+        [ -f "$conf" ] || continue
+        iface=$(basename "$conf" .conf)
+        if iface_running "$iface"; then
+          ip4=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [^ ]*' | head -1 | cut -d' ' -f2 | cut -d/ -f1)
+          ip6=$(ip -6 addr show dev "$iface" 2>/dev/null | awk '
+            /inet6 / {
+              for (i = 1; i <= NF; i++) {
+                if ($i == "inet6" && (i + 1) <= NF) {
+                  a = $(i + 1)
+                  sub(/\/.*/, "", a)
+                  la = tolower(a)
+                  if (la !~ /^fe80:/ && a != "::1") {
+                    print a
+                    exit
+                  }
+                }
+              }
+            }
+          ')
+          if [ -n "$ip4" ] && [ -n "$ip6" ]; then
+            ip_summary="${ip4}, ${ip6}"
+          elif [ -n "$ip4" ]; then
+            ip_summary="$ip4"
+          elif [ -n "$ip6" ]; then
+            ip_summary="$ip6"
+          else
+            ip_summary="?"
+          fi
+          if [ -n "$desc" ]; then desc="$desc | "; fi
+          desc="${desc}${iface}: ${ip_summary}"
+        fi
+      done
+      ksud module config set override.description "✅ ${status_running} | ${desc}" 2>/dev/null || true
+    else
+      ksud module config set override.description "⏹ ${status_stopped}" 2>/dev/null || true
+    fi
   fi
+  sync_status_notification
+  return 0
 }
 
 # --- commands ---
@@ -1002,9 +2177,9 @@ show_status() {
 # resolve hostname to IP using available Android tools
 resolve_host4() {
   host="$1"
-  addr=$(ping -c1 -W2 "$host" 2>/dev/null | grep -oE '\([0-9]+(\.[0-9]+){3}\)' | head -1 | tr -d '()')
-  [ -n "$addr" ] && echo "$addr" && return
   addr=$(getent hosts "$host" 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+(\.[0-9]+){3}$/) { print $i; exit } }')
+  [ -n "$addr" ] && echo "$addr" && return
+  addr=$(ping -c1 -W1 "$host" 2>/dev/null | grep -oE '\([0-9]+(\.[0-9]+){3}\)' | head -1 | tr -d '()')
   [ -n "$addr" ] && echo "$addr" && return
   addr=$($busybox nslookup "$host" 2>/dev/null | awk '
     /^Name:/ || /^Non-authoritative answer:/ { answer = 1; next }
@@ -1024,12 +2199,16 @@ resolve_host4() {
 
 resolve_host6() {
   host="$1"
-  if command -v ping6 >/dev/null 2>&1; then
-    addr=$(ping6 -c1 -W2 "$host" 2>/dev/null | grep -oE '([0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:]+' | head -1)
-    [ -n "$addr" ] && echo "$addr" && return
-  fi
   addr=$(getent hosts "$host" 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-Fa-f:]*:[0-9A-Fa-f:]*$/) { print $i; exit } }')
-  [ -n "$addr" ] && echo "$addr" && return
+  is_ipv6 "$addr" && echo "$addr" && return
+  if command -v ping6 >/dev/null 2>&1; then
+    addr=$(ping6 -c1 -W1 "$host" 2>/dev/null | grep -oE '([0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:]+' | head -1)
+    is_ipv6 "$addr" && echo "$addr" && return
+  fi
+  if command -v ping >/dev/null 2>&1; then
+    addr=$(ping -6 -c1 -W1 "$host" 2>/dev/null | grep -oE '([0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:]+' | head -1)
+    is_ipv6 "$addr" && echo "$addr" && return
+  fi
   addr=$($busybox nslookup "$host" 2>/dev/null | awk '
     /^Name:/ || /^Non-authoritative answer:/ { answer = 1; next }
     answer {
@@ -1050,6 +2229,12 @@ resolve_host6() {
 
 resolve_host() {
   host="$1"
+  if [ -z "$(get_underlay_default_route 4)" ] && [ -n "$(get_underlay_default_route 6)" ]; then
+    addr=$(resolve_host6 "$host")
+    [ -n "$addr" ] && echo "$addr" && return
+    resolve_host4 "$host"
+    return
+  fi
   addr=$(resolve_host4 "$host")
   [ -n "$addr" ] && echo "$addr" && return
   resolve_host6 "$host"
@@ -1070,11 +2255,15 @@ reresolve_dns() {
 
     # parse each peer's public key and endpoint from conf
     awk '
-      { gsub(/\r/, "") }
-      /^\[Peer\]/       { peer=1; pk=""; ep=""; next }
-      /^\[/             { if(peer && pk && ep) print pk " " ep; peer=0; next }
-      peer && /^[[:space:]]*PublicKey/  { gsub(/.*= */, ""); pk=$0 }
-      peer && /^[[:space:]]*Endpoint/  { gsub(/.*= */, ""); ep=$0 }
+      {
+        gsub(/\r/, "")
+        sub(/#.*$/, "")
+        low = tolower($0)
+      }
+      low ~ /^[[:space:]]*\[peer\][[:space:]]*$/ { if(peer && pk && ep) print pk " " ep; peer=1; pk=""; ep=""; next }
+      low ~ /^[[:space:]]*\[/                    { if(peer && pk && ep) print pk " " ep; peer=0; next }
+      peer && low ~ /^[[:space:]]*publickey[[:space:]]*=/ { sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]*$/, ""); pk=$0 }
+      peer && low ~ /^[[:space:]]*endpoint[[:space:]]*=/  { sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]*$/, ""); ep=$0 }
       END { if(peer && pk && ep) print pk " " ep }
     ' "$conf" | while read -r pubkey endpoint; do
       # split host:port — skip if endpoint is already a raw IP
@@ -1096,6 +2285,1171 @@ reresolve_dns() {
         echo "$(date '+%Y-%m-%d %H:%M:%S') $iface: $host $cur_ip -> $new_ip" >> "$reresolve_log"
       fi
     done
+  done
+}
+
+# --- Auto-tunnel (Wi-Fi include/exclude & dual-SIM mobile rules) ---
+
+autotunnel_pid_file="$wg_data/autotunnel.pid"
+
+normalize_ssid() {
+  raw_ssid="$1"
+  raw_ssid=$(printf '%s' "$raw_ssid" | tr -d '\r\n')
+  case "$raw_ssid" in
+    \"*\")
+      raw_ssid="${raw_ssid#\"}"
+      raw_ssid="${raw_ssid%\"}"
+      ;;
+  esac
+  case "$raw_ssid" in
+    ""|"<unknown ssid>"|"0x"|"null"|"(none)") echo "" ;;
+    *) printf '%s\n' "$raw_ssid" ;;
+  esac
+}
+
+detect_wifi_ssid() {
+  # 1. Android 11+ cmd wifi status
+  if command -v cmd >/dev/null 2>&1; then
+    wifi_status=$(cmd wifi status 2>/dev/null)
+    case "$wifi_status" in
+      *"Wifi is not connected"*)
+        echo ""
+        return 0
+        ;;
+      *"Wifi is connected to "*)
+        ssid=$(printf '%s\n' "$wifi_status" | awk '
+          /Wifi is connected to / {
+            line = $0
+            sub(/^.*Wifi is connected to /, "", line)
+            sub(/[[:space:]]*$/, "", line)
+            print line
+            exit
+          }
+        ')
+        ssid=$(normalize_ssid "$ssid")
+        if [ -n "$ssid" ]; then
+          printf '%s\n' "$ssid"
+          return 0
+        fi
+        ;;
+    esac
+  fi
+
+  # 2. dumpsys wifi (Android 9-16)
+  if command -v dumpsys >/dev/null 2>&1; then
+    ssid=$(dumpsys wifi 2>/dev/null | awk '
+      /SSID:/ && (/Supplicant state: COMPLETED/ || /mWifiInfo/ || /WifiInfo:/) {
+        line = $0
+        if (index(line, "Supplicant state:") > 0 && index(line, "COMPLETED") == 0) next
+        sub(/^.*SSID:[[:space:]]*/, "", line)
+        sub(/,[[:space:]]*BSSID:.*$/, "", line)
+        sub(/[[:space:]]*$/, "", line)
+        if (line != "" && line != "<unknown ssid>" && line != "\"<unknown ssid>\"") {
+          print line
+          exit
+        }
+      }
+    ')
+    ssid=$(normalize_ssid "$ssid")
+    if [ -n "$ssid" ]; then
+      printf '%s\n' "$ssid"
+      return 0
+    fi
+
+    # 3. dumpsys connectivity extra SSID fallback
+    ssid=$(dumpsys connectivity 2>/dev/null | awk '
+      /WIFI/ && /CONNECTED\/CONNECTED/ && /extra:/ {
+        line = $0
+        sub(/^.*extra:[[:space:]]*/, "", line)
+        sub(/,[[:space:]]*(roaming|failover|isAvailable|reason|metered).*$/, "", line)
+        sub(/[[:space:]]*$/, "", line)
+        print line
+        exit
+      }
+    ')
+    ssid=$(normalize_ssid "$ssid")
+    if [ -n "$ssid" ]; then
+      printf '%s\n' "$ssid"
+      return 0
+    fi
+  fi
+
+  echo ""
+}
+
+detect_sim_info() {
+  sim_active="none"
+  sim1_name=""
+  sim2_name=""
+  data_sub_id=""
+
+  if command -v settings >/dev/null 2>&1; then
+    setting_sub=$(settings get global multi_sim_data_call 2>/dev/null | tr -d '\r\n ')
+    case "$setting_sub" in
+      ""|null|-1|*[!0-9]*) ;;
+      *) data_sub_id="$setting_sub" ;;
+    esac
+  fi
+
+  if command -v dumpsys >/dev/null 2>&1; then
+    # Prefer the exact mSubId of the active INTERNET cellular network from dumpsys connectivity
+    conn_sub=$(dumpsys connectivity 2>/dev/null | awk '
+      /Active default network:[[:space:]]*[0-9]+/ {
+        line = $0; sub(/^.*Active default network:[[:space:]]*/, "", line); sub(/[^0-9].*$/, "", line)
+        def_net = line; next
+      }
+      /NetworkAgentInfo\{/ && /CELLULAR/ {
+        if ($0 ~ / destroyed / || $0 ~ / lingering/ || $0 ~ / nascent/) next
+        if ($0 ~ /Capabilities:/ && ($0 !~ /INTERNET/ || $0 !~ /NOT_VPN/)) next
+        sub_id = ""
+        if (match($0, /mSubId[[:space:]]*=[[:space:]]*[0-9]+/)) {
+          sub_id = substr($0, RSTART, RLENGTH); sub(/^.*=[[:space:]]*/, "", sub_id)
+        } else if (match($0, /SubscriptionIds:[[:space:]]*\{[0-9]+\}/)) {
+          sub_id = substr($0, RSTART, RLENGTH); sub(/^.*\{/, "", sub_id); sub(/\}.*$/, "", sub_id)
+        }
+        if (sub_id == "") next
+        cur_net = ""
+        if (match($0, /network\{[0-9]+\}/)) cur_net = substr($0, RSTART + 8, RLENGTH - 9)
+        if (def_net != "" && cur_net == def_net) { exact = sub_id; exit }
+        if (fallback == "") fallback = sub_id
+      }
+      END { if (exact != "") print exact; else if (fallback != "") print fallback }
+    ')
+    case "$conn_sub" in
+      ""|*[!0-9]*) ;;
+      *) data_sub_id="$conn_sub" ;;
+    esac
+
+    isub_out=$(dumpsys isub 2>/dev/null)
+    if [ -n "$isub_out" ]; then
+      isub_parsed=$(printf '%s\n' "$isub_out" | awk -v conn_sub="$conn_sub" -v setting_sub="$data_sub_id" '
+        function extract_num(s, pat,   tmp) {
+          if (match(s, pat)) {
+            tmp = substr(s, RSTART, RLENGTH)
+            sub(/^[^0-9-]+/, "", tmp)
+            sub(/[^0-9-].*$/, "", tmp)
+            return tmp
+          }
+          return ""
+        }
+        function extract_name(s,   tmp) {
+          if (match(s, /displayName=[^,\]]+/)) {
+            tmp = substr(s, RSTART, RLENGTH)
+            sub(/^displayName=/, "", tmp)
+            sub(/[[:space:]]+(carrierName|nameSource|iconTint|number|dataRoaming|mcc|mnc|countryIso|isEmbedded|portIndex|cardId)=.*$/, "", tmp)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", tmp)
+            if (tmp != "" && tmp != "null") return tmp
+          }
+          if (match(s, /carrierName=[^,\]]+/)) {
+            tmp = substr(s, RSTART, RLENGTH)
+            sub(/^carrierName=/, "", tmp)
+            sub(/[[:space:]]+(nameSource|iconTint|number|dataRoaming|mcc|mnc|countryIso|isEmbedded|portIndex|cardId)=.*$/, "", tmp)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", tmp)
+            if (tmp != "" && tmp != "null") return tmp
+          }
+          return ""
+        }
+        {
+          gsub(/\r/, "")
+          if (active_sub == "") {
+            v = extract_num($0, "(activeDataSubId|Active data subId)[[:space:]]*=[[:space:]]*[0-9]+")
+            if (v != "" && v > 0) active_sub = v
+          }
+          if (default_sub == "") {
+            v = extract_num($0, "(defaultDataSubId|Default data subId)[[:space:]]*=[[:space:]]*[0-9]+")
+            if (v != "" && v > 0) default_sub = v
+          }
+          if ($0 ~ /simSlotIndex=[0-9]+/ && $0 ~ /(^|[{[:space:]])id=[0-9]+/) {
+            sid = extract_num($0, "(^|[{[:space:]])id=[0-9]+")
+            slot = extract_num($0, "simSlotIndex=[0-9]+")
+            name = extract_name($0)
+            if (sid != "" && (slot == "0" || slot == "1")) {
+              slot_by_id[sid] = slot
+              if (slot == "0" && name != "" && s1 == "") s1 = name
+              if (slot == "1" && name != "" && s2 == "") s2 = name
+            }
+          }
+        }
+        END {
+          chosen = conn_sub
+          if (chosen == "") chosen = active_sub
+          if (chosen == "") chosen = default_sub
+          if (chosen == "") chosen = setting_sub
+          aslot = "none"
+          if (chosen != "" && (chosen in slot_by_id)) {
+            if (slot_by_id[chosen] == "0") aslot = "sim1"
+            else if (slot_by_id[chosen] == "1") aslot = "sim2"
+          }
+          printf "ACTIVE=%s\nSIM1=%s\nSIM2=%s\n", aslot, s1, s2
+        }
+      ')
+      sim_active=$(printf '%s\n' "$isub_parsed" | sed -n 's/^ACTIVE=//p' | head -1)
+      sim1_name=$(printf '%s\n' "$isub_parsed" | sed -n 's/^SIM1=//p' | head -1)
+      sim2_name=$(printf '%s\n' "$isub_parsed" | sed -n 's/^SIM2=//p' | head -1)
+    fi
+
+    # Fallback: check telephony.registry for the Phone Id whose mobile data is CONNECTED (2)
+    if [ "$sim_active" = "none" ] || [ -z "$sim_active" ]; then
+      reg_slot=$(dumpsys telephony.registry 2>/dev/null | awk '
+        /Phone Id=[0-9]+/ {
+          line = $0
+          sub(/^.*Phone Id=/, "", line)
+          sub(/[^0-9].*$/, "", line)
+          cur_phone = line
+          next
+        }
+        /mDataConnectionState=2/ {
+          if (cur_phone == "0") { print "sim1"; exit }
+          if (cur_phone == "1") { print "sim2"; exit }
+        }
+      ')
+      [ -n "$reg_slot" ] && sim_active="$reg_slot"
+    fi
+  fi
+
+  # Fallback carrier names & single-SIM detection via getprop
+  if command -v getprop >/dev/null 2>&1; then
+    if [ -z "$sim1_name" ] || [ -z "$sim2_name" ]; then
+      op_alpha=$(getprop gsm.operator.alpha 2>/dev/null | tr -d '\r\n')
+      if [ -n "$op_alpha" ]; then
+        prop_s1=$(printf '%s' "$op_alpha" | cut -d',' -f1)
+        prop_s2=$(printf '%s' "$op_alpha" | awk -F',' '{ if (NF >= 2) print $2 }')
+        [ -z "$sim1_name" ] && [ -n "$prop_s1" ] && sim1_name="$prop_s1"
+        [ -z "$sim2_name" ] && [ -n "$prop_s2" ] && sim2_name="$prop_s2"
+      fi
+    fi
+    if [ "$sim_active" = "none" ] || [ -z "$sim_active" ]; then
+      sim_states=$(getprop gsm.sim.state 2>/dev/null | tr -d '\r\n')
+      case "$sim_states" in
+        LOADED,ABSENT|READY,ABSENT|LOADED|READY) sim_active="sim1" ;;
+        ABSENT,LOADED|ABSENT,READY) sim_active="sim2" ;;
+      esac
+    fi
+  fi
+
+  [ -z "$sim_active" ] && sim_active="none"
+}
+
+detect_active_transport() {
+  if command -v dumpsys >/dev/null 2>&1; then
+    conn_transport=$(dumpsys connectivity 2>/dev/null | awk '
+      /Active default network:[[:space:]]*[0-9]+/ {
+        line = $0
+        sub(/^.*Active default network:[[:space:]]*/, "", line)
+        sub(/[^0-9].*$/, "", line)
+        default_net = line
+        next
+      }
+      /NetworkAgentInfo\{/ {
+        if ($0 ~ / destroyed / || $0 ~ / lingering/ || $0 ~ / nascent/) next
+        if ($0 ~ /Capabilities:/ && ($0 !~ /INTERNET/ || $0 !~ /NOT_VPN/)) next
+
+        cur_net = ""
+        if (match($0, /network\{[0-9]+\}/)) {
+          cur_net = substr($0, RSTART + 8, RLENGTH - 9)
+        } else if (match($0, /netId:[[:space:]]*[0-9]+/)) {
+          tmp = substr($0, RSTART, RLENGTH)
+          sub(/^netId:[[:space:]]*/, "", tmp)
+          cur_net = tmp
+        } else if (match($0, /\[[0-9]+\]/)) {
+          tmp = substr($0, RSTART + 1, RLENGTH - 2)
+          cur_net = tmp
+        }
+        is_connected = ($0 ~ /CONNECTED\/CONNECTED/ || $0 ~ /state: CONNECTED/ || $0 ~ /ni\{[^}]* CONNECTED/)
+        tr = ""
+        if (match($0, /Transports:[[:space:]]*[A-Z_|]+/)) tr = substr($0, RSTART, RLENGTH)
+        is_vpn = (tr ~ /VPN/ || $0 ~ /type:[[:space:]]*VPN/ || $0 ~ /ni\{VPN/)
+        t = ""
+        if (tr ~ /WIFI/ || $0 ~ /type:[[:space:]]*WIFI/ || $0 ~ /ni\{WIFI/) t = "wifi"
+        else if (tr ~ /CELLULAR/ || $0 ~ /type:[[:space:]]*MOBILE/ || $0 ~ /ni\{MOBILE/) t = "mobile"
+        else if (tr ~ /ETHERNET/ || $0 ~ /type:[[:space:]]*ETHERNET/ || $0 ~ /ni\{ETHERNET/) t = "other"
+
+        if (t != "" && !is_vpn) {
+          if (default_net != "" && cur_net == default_net) {
+            matched_default = t
+          }
+          if (is_connected) {
+            if (t == "wifi") has_wifi = 1
+            else if (t == "mobile") has_mobile = 1
+            else has_other = 1
+          }
+        }
+      }
+      END {
+        if (matched_default != "") print matched_default
+        else if (has_wifi) print "wifi"
+        else if (has_mobile) print "mobile"
+        else if (has_other) print "other"
+      }
+    ')
+    if [ -n "$conn_transport" ]; then
+      printf '%s\n' "$conn_transport"
+      return 0
+    fi
+  fi
+
+  # Fallback: inspect underlay default routes (IPv4 then IPv6)
+  underlay_r=$(get_underlay_default_route 4)
+  [ -z "$underlay_r" ] && underlay_r=$(get_underlay_default_route 6)
+  underlay_dev=$(printf '%s\n' "$underlay_r" | awk '{print $3}')
+  case "$underlay_dev" in
+    wlan*) echo "wifi" ;;
+    rmnet*|ccmni*|v4-rmnet*|v4-ccmni*|wwan*) echo "mobile" ;;
+    eth*|usb*|rndis*) echo "other" ;;
+    *) echo "none" ;;
+  esac
+}
+
+detect_network_state() {
+  net_transport=$(detect_active_transport)
+  net_wifi_ssid=""
+  if [ "$net_transport" = "wifi" ]; then
+    net_wifi_ssid=$(detect_wifi_ssid)
+  fi
+  detect_sim_info
+  net_sim_slot="$sim_active"
+  net_sim1_name="$sim1_name"
+  net_sim2_name="$sim2_name"
+}
+
+list_saved_wifi_ssids() {
+  found_ssids=""
+  if command -v cmd >/dev/null 2>&1; then
+    found_ssids=$(cmd wifi list-networks 2>/dev/null | awk '
+      NR == 1 && /Network Id/ { next }
+      /^[[:space:]]*[0-9]+[[:space:]]+/ {
+        line = $0
+        sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", line)
+        sub(/[[:space:]]+(open|wep|wpa2-psk|wpa3-sae|wpa2-eap|wpa3-enterprise|owe|psk|sae|eap|none|transition|wpa-psk)([[:space:]].*)?$/, "", line)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+        if (line != "" && line != "<unknown ssid>") print line
+      }
+    ')
+  fi
+  if [ -z "$found_ssids" ]; then
+    for store in /data/misc/apexdata/com.android.wifi/WifiConfigStore.xml /data/misc/wifi/WifiConfigStore.xml; do
+      [ -r "$store" ] || continue
+      found_ssids=$(awk '
+        /<string name="SSID">/ {
+          line = $0
+          sub(/^.*<string name="SSID">/, "", line)
+          sub(/<\/string>.*$/, "", line)
+          gsub(/&quot;/, "\"", line)
+          gsub(/&amp;/, "\\&", line)
+          gsub(/&lt;/, "<", line)
+          gsub(/&gt;/, ">", line)
+          gsub(/^"|"$/, "", line)
+          if (line != "") print line
+        }
+      ' "$store" 2>/dev/null)
+      [ -n "$found_ssids" ] && break
+    done
+  fi
+  if [ -n "$found_ssids" ]; then
+    printf '%s\n' "$found_ssids" | awk '!seen[$0]++'
+  fi
+}
+
+print_net_info() {
+  detect_network_state
+  printf 'TRANSPORT=%s\n' "$net_transport"
+  printf 'WIFI_SSID=%s\n' "$net_wifi_ssid"
+  printf 'SIM_SLOT=%s\n' "$net_sim_slot"
+  printf 'SIM1_NAME=%s\n' "$net_sim1_name"
+  printf 'SIM2_NAME=%s\n' "$net_sim2_name"
+}
+
+eval_autotunnel_decision() {
+  at_iface="$1"
+  at_transport="$2"
+  at_ssid="$3"
+  at_sim="$4"
+  at_conf="$wg_data/autotunnel.${at_iface}"
+  at_ssids="$wg_data/autotunnel.${at_iface}.ssids"
+
+  [ -f "$at_conf" ] || { echo "skip"; return 0; }
+
+  AUTOTUNNEL_ENABLED=0
+  WIFI_MODE="ignore"
+  MOBILE_SIM1="ignore"
+  MOBILE_SIM2="ignore"
+  # shellcheck disable=SC1090
+  . "$at_conf" 2>/dev/null
+
+  if [ "${AUTOTUNNEL_ENABLED:-0}" != "1" ]; then
+    echo "skip"
+    return 0
+  fi
+
+  case "$at_transport" in
+    wifi)
+      case "${WIFI_MODE:-ignore}" in
+        always_on) echo "start" ;;
+        always_off) echo "stop" ;;
+        exclude)
+          [ -n "$at_ssid" ] || { echo "noop"; return 0; }
+          if [ -f "$at_ssids" ] && grep -Fxq -- "$at_ssid" "$at_ssids"; then
+            echo "stop"
+          else
+            echo "start"
+          fi
+          ;;
+        include)
+          [ -n "$at_ssid" ] || { echo "noop"; return 0; }
+          if [ -f "$at_ssids" ] && grep -Fxq -- "$at_ssid" "$at_ssids"; then
+            echo "start"
+          else
+            echo "stop"
+          fi
+          ;;
+        *) echo "noop" ;;
+      esac
+      ;;
+    mobile)
+      case "$at_sim" in
+        sim1)
+          case "${MOBILE_SIM1:-ignore}" in
+            on) echo "start" ;;
+            off) echo "stop" ;;
+            *) echo "noop" ;;
+          esac
+          ;;
+        sim2)
+          case "${MOBILE_SIM2:-ignore}" in
+            on) echo "start" ;;
+            off) echo "stop" ;;
+            *) echo "noop" ;;
+          esac
+          ;;
+        *) echo "noop" ;;
+      esac
+      ;;
+    *)
+      echo "noop"
+      ;;
+  esac
+}
+
+is_autotunnel_enabled_for() {
+  chk_at_f="$wg_data/autotunnel.$1"
+  [ -f "$chk_at_f" ] || return 1
+  AUTOTUNNEL_ENABLED=0
+  # shellcheck disable=SC1090
+  . "$chk_at_f" 2>/dev/null
+  [ "${AUTOTUNNEL_ENABLED:-0}" = "1" ]
+}
+
+is_manual_paused() {
+  [ -f "$wg_data/manual_pause.$1" ]
+}
+
+set_manual_pause() {
+  mp_iface="$1"
+  mp_on="$2"
+  if [ "$mp_on" = "1" ]; then
+    if is_autotunnel_enabled_for "$mp_iface"; then
+      mkdir -p "$wg_data"
+      printf '1\n' > "$wg_data/manual_pause.$mp_iface"
+      wg_log "$mp_iface" "manually stopped: auto-tunnel paused until manual start or resume"
+    fi
+  else
+    rm -f "$wg_data/manual_pause.$mp_iface"
+  fi
+}
+
+auto_tunnel_resume() {
+  res_filter="${1:-}"
+  if [ -n "$res_filter" ]; then
+    rm -f "$wg_data/manual_pause.$res_filter"
+    wg_log "$res_filter" "auto-tunnel resumed"
+  else
+    rm -f "$wg_data"/manual_pause.*
+    wg_log auto "auto-tunnel resumed for all interfaces"
+  fi
+  auto_tunnel_apply "$res_filter"
+  any_running && repair_endpoint_routes "$res_filter"
+  apply_stay_awake_runtime
+  update_desc
+  auto_tunnel_ensure_daemon
+  notif_ensure_daemon
+}
+
+any_autotunnel_enabled() {
+  for at_f in "$wg_data"/autotunnel.*; do
+    [ -f "$at_f" ] || continue
+    case "$at_f" in
+      *.ssids|*.pid) continue ;;
+    esac
+    AUTOTUNNEL_ENABLED=0
+    # shellcheck disable=SC1090
+    . "$at_f" 2>/dev/null
+    [ "${AUTOTUNNEL_ENABLED:-0}" = "1" ] && return 0
+  done
+  return 1
+}
+
+auto_tunnel_apply() {
+  filter="$1"
+  detect_network_state
+  changed=0
+
+  if [ "$net_transport" = "wifi" ]; then
+    net_label="wifi:${net_wifi_ssid:-unknown}"
+  elif [ "$net_transport" = "mobile" ]; then
+    net_label="mobile:${net_sim_slot}"
+  else
+    net_label="$net_transport"
+  fi
+
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    iface=$(basename "$conf" .conf)
+    [ -n "$filter" ] && [ "$filter" != "$iface" ] && continue
+
+    # Respect manual stop: do not auto-start/stop while user explicitly paused this tunnel
+    if is_manual_paused "$iface"; then
+      continue
+    fi
+
+    decision=$(eval_autotunnel_decision "$iface" "$net_transport" "$net_wifi_ssid" "$net_sim_slot")
+    case "$decision" in
+      start)
+        if ! iface_running "$iface"; then
+          wg_log "$iface" "auto-tunnel: starting ($net_label)"
+          autotunnel_guard_checked=1
+          if wg_up "$conf" "$iface" >> "$log_file" 2>&1; then
+            changed=1
+          fi
+          autotunnel_guard_checked=0
+        fi
+        ;;
+      stop)
+        if iface_running "$iface"; then
+          wg_log "$iface" "auto-tunnel: stopping ($net_label)"
+          wg_down "$iface" >> "$log_file" 2>&1
+          changed=1
+        fi
+        ;;
+    esac
+  done
+
+  if [ "$changed" = "1" ]; then
+    apply_stay_awake_runtime
+    update_desc
+  fi
+  return 0
+}
+
+autotunnel_daemon_running() {
+  [ -f "$autotunnel_pid_file" ] || return 1
+  old_pid=$(cat "$autotunnel_pid_file" 2>/dev/null)
+  case "$old_pid" in
+    ""|*[!0-9]*) return 1 ;;
+  esac
+  kill -0 "$old_pid" 2>/dev/null || return 1
+  if [ -r "/proc/$old_pid/cmdline" ]; then
+    tr '\0' ' ' < "/proc/$old_pid/cmdline" 2>/dev/null | grep -q 'auto-tunnel-watch' && return 0
+    return 1
+  fi
+  return 0
+}
+
+get_underlay_signature() {
+  t4=$(get_android_default_table 4)
+  r4=$(get_underlay_default_route 4)
+  d4=$(printf '%s\n' "$r4" | awk '{print $3}')
+  ip4_u=""
+  [ -n "$d4" ] && ip4_u=$(iface_first_ip4 "$d4")
+
+  t6=$(get_android_default_table 6)
+  r6=$(get_underlay_default_route 6)
+  d6=$(printf '%s\n' "$r6" | awk '{print $3}')
+  ip6_u=""
+  [ -n "$d6" ] && ip6_u=$(iface_first_ip6 "$d6")
+
+  printf '%s:%s:%s|%s:%s:%s\n' "$t4" "$r4" "$ip4_u" "$t6" "$r6" "$ip6_u"
+}
+
+auto_tunnel_stop_daemon() {
+  [ -f "$autotunnel_pid_file" ] || return 0
+  if autotunnel_daemon_running; then
+    old_pid=$(cat "$autotunnel_pid_file" 2>/dev/null)
+    kill "$old_pid" 2>/dev/null || true
+  fi
+  rm -f "$autotunnel_pid_file"
+}
+
+auto_tunnel_ensure_daemon() {
+  [ "${WGKSU_NO_DAEMON:-0}" = "1" ] && return 0
+  if ! any_running && ! any_autotunnel_enabled; then
+    auto_tunnel_stop_daemon
+    return 0
+  fi
+  autotunnel_daemon_running && return 0
+  nohup sh "$wgksu_self" auto-tunnel-watch </dev/null >/dev/null 2>&1 &
+}
+
+auto_tunnel_watch() {
+  mkdir -p "$wg_data"
+  if autotunnel_daemon_running; then
+    return 0
+  fi
+  printf '%s\n' "$$" > "$autotunnel_pid_file"
+  trap 'rm -f "$autotunnel_pid_file"' 0 1 2 15
+
+  last_net_key=""
+  last_underlay_sig=""
+  dns_check_tick=0
+  reval_tick=0
+  reval_attempts=0
+  while :; do
+    has_running=0
+    has_autotunnel=0
+    any_running && has_running=1
+    any_autotunnel_enabled && has_autotunnel=1
+
+    if [ "$has_running" = "0" ] && [ "$has_autotunnel" = "0" ]; then
+      last_underlay_sig=""
+      dns_check_tick=0
+      reval_tick=0
+      reval_attempts=0
+      sleep 15
+      continue
+    fi
+
+    # 1. Fast underlay change detector (Wi-Fi <-> Mobile Data / SIM switch / gateway change)
+    if [ "$has_running" = "1" ]; then
+      [ -f "$notif_req_file" ] && handle_notif_action
+      notif_ensure_daemon
+      underlay_sig=$(get_underlay_signature)
+      if [ -n "$last_underlay_sig" ] && [ "$underlay_sig" != "$last_underlay_sig" ]; then
+        last_underlay_sig="$underlay_sig"
+        dns_check_tick=0
+        reval_tick=0
+        reval_attempts=0
+        if [ "$has_autotunnel" = "1" ]; then
+          detect_network_state
+          if [ "$net_transport" != "none" ] && { [ "$net_transport" != "wifi" ] || [ -n "$net_wifi_ssid" ]; }; then
+            last_net_key="${net_transport}|${net_wifi_ssid}|${net_sim_slot}"
+            auto_tunnel_apply ""
+          fi
+        fi
+        repair_endpoint_routes "" 1
+      elif [ -z "$last_underlay_sig" ]; then
+        last_underlay_sig="$underlay_sig"
+        reval_tick=0
+        reval_attempts=0
+      else
+        dns_check_tick=$((dns_check_tick + 1))
+        if [ "$dns_check_tick" -ge 10 ]; then
+          dns_check_tick=0
+          ensure_dns_redirect_intact
+        fi
+        # Clear stuck Pixel/Android "!" unvalidated state right after boot or network handoff.
+        # Android NetworkMonitor ignores forceReevaluation until IGNORE_REEVALUATE_ATTEMPTS (5)
+        # probes complete (~35-65s under GFW blackhole), so keep polling every 6s for ~90s,
+        # then throttle to every 30s until VALIDATED; reset immediately once validated.
+        reval_tick=$((reval_tick + 1))
+        if [ "$reval_tick" -ge 2 ]; then
+          reval_tick=0
+          if [ -n "$(get_android_unvalidated_netids)" ]; then
+            reval_attempts=$((reval_attempts + 1))
+            if [ "$reval_attempts" -le 15 ] || [ $((reval_attempts % 5)) -eq 0 ]; then
+              revalidate_unvalidated_networks 1 || true
+            fi
+          else
+            reval_attempts=0
+          fi
+        fi
+      fi
+    else
+      reval_tick=0
+      reval_attempts=0
+    fi
+
+    # 2. Auto-tunnel watcher (Wi-Fi SSID include/exclude & dual-SIM transitions)
+    if [ "$has_autotunnel" = "1" ]; then
+      detect_network_state
+      if [ "$net_transport" = "wifi" ] && [ -z "$net_wifi_ssid" ]; then
+        sleep 3
+        continue
+      fi
+      if [ "$net_transport" != "none" ]; then
+        net_key="${net_transport}|${net_wifi_ssid}|${net_sim_slot}"
+        if [ "$net_key" != "$last_net_key" ]; then
+          last_net_key="$net_key"
+          auto_tunnel_apply ""
+          # Ensure routes are fresh immediately after any auto-tunnel transition
+          any_running && repair_endpoint_routes ""
+          sync_status_notification
+        fi
+      fi
+    fi
+
+    sleep 3
+  done
+}
+
+# --- Native Pixel Status Bar Notification & One-Tap Actions ---
+
+notif_pkg="com.wireguard.ksu.status"
+notif_req_dir="${WGKSU_NOTIF_DIR:-/data/user/0/com.wireguard.ksu.status/files}"
+notif_req_file="$notif_req_dir/action.req"
+notif_pid_file="$wg_data/notifwatch.pid"
+notif_conf_file="$wg_data/notification"
+
+get_notification_enabled() {
+  if [ -f "$notif_conf_file" ]; then
+    NOTIFICATION_ENABLED=1
+    # shellcheck disable=SC1090
+    . "$notif_conf_file" 2>/dev/null
+    echo "${NOTIFICATION_ENABLED:-1}"
+  else
+    echo "1"
+  fi
+}
+
+set_notification_enabled() {
+  mkdir -p "$wg_data"
+  printf 'NOTIFICATION_ENABLED=%s\n' "$1" > "$notif_conf_file"
+  if [ "$1" = "1" ]; then
+    notif_ensure_daemon
+    sync_status_notification
+  else
+    notif_stop_daemon
+    if command -v am >/dev/null 2>&1; then
+      am broadcast --user 0 -n "${notif_pkg}/.StatusReceiver" -a "${notif_pkg}.CANCEL" >/dev/null 2>&1 || true
+    fi
+  fi
+}
+
+ensure_companion_installed() {
+  command -v pm >/dev/null 2>&1 || return 0
+  apk_src=""
+  if [ -f "$wg_data/wgksu-status.apk" ]; then
+    apk_src="$wg_data/wgksu-status.apk"
+  elif [ -f "$wg_module/companion/wgksu-status.apk" ]; then
+    apk_src="$wg_module/companion/wgksu-status.apk"
+  fi
+
+  pkg_installed=0
+  pm path "$notif_pkg" >/dev/null 2>&1 && pkg_installed=1
+  apk_stamp=""
+  if [ -n "$apk_src" ]; then
+    apk_stamp=$(wc -c < "$apk_src" 2>/dev/null | tr -d ' ')
+  fi
+  saved_stamp=$(cat "$wg_data/.companion_ver" 2>/dev/null || true)
+
+  if [ "$pkg_installed" = "0" ] || { [ -n "$apk_stamp" ] && [ "$apk_stamp" != "$saved_stamp" ]; }; then
+    [ -n "$apk_src" ] || return 1
+    pm install -r -g "$apk_src" >/dev/null 2>&1 || pm install -r "$apk_src" >/dev/null 2>&1 || return 1
+    pm grant "$notif_pkg" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
+    if command -v appops >/dev/null 2>&1; then
+      appops set "$notif_pkg" POST_NOTIFICATION allow >/dev/null 2>&1 || true
+    fi
+    if command -v dumpsys >/dev/null 2>&1; then
+      dumpsys deviceidle whitelist "+$notif_pkg" >/dev/null 2>&1 || true
+    fi
+    mkdir -p "$wg_data"
+    [ -n "$apk_stamp" ] && printf '%s\n' "$apk_stamp" > "$wg_data/.companion_ver"
+  fi
+  return 0
+}
+
+primary_iface_name() {
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    cand=$(basename "$conf" .conf)
+    iface_running "$cand" && { echo "$cand"; return 0; }
+  done
+  [ -f "$wg_data/wg0.conf" ] && { echo "wg0"; return 0; }
+  for conf in "$wg_data"/*.conf; do
+    [ -f "$conf" ] || continue
+    basename "$conf" .conf
+    return 0
+  done
+  return 1
+}
+
+format_notif_net_label() {
+  case "${status_locale:-en}" in
+    zh)
+      if [ "$net_transport" = "wifi" ]; then
+        printf 'Wi-Fi · %s' "${net_wifi_ssid:-未知}"
+      elif [ "$net_transport" = "mobile" ]; then
+        if [ "$net_sim_slot" = "sim1" ]; then
+          [ -n "$net_sim1_name" ] && printf '移动数据 · 卡 1 (%s)' "$net_sim1_name" || printf '移动数据 · 卡 1'
+        elif [ "$net_sim_slot" = "sim2" ]; then
+          [ -n "$net_sim2_name" ] && printf '移动数据 · 卡 2 (%s)' "$net_sim2_name" || printf '移动数据 · 卡 2'
+        else
+          printf '移动数据'
+        fi
+      fi
+      ;;
+    ru)
+      if [ "$net_transport" = "wifi" ]; then
+        printf 'Wi-Fi · %s' "${net_wifi_ssid:-Неизвестно}"
+      elif [ "$net_transport" = "mobile" ]; then
+        if [ "$net_sim_slot" = "sim1" ]; then
+          [ -n "$net_sim1_name" ] && printf 'Мобильная · SIM 1 (%s)' "$net_sim1_name" || printf 'Мобильная · SIM 1'
+        elif [ "$net_sim_slot" = "sim2" ]; then
+          [ -n "$net_sim2_name" ] && printf 'Мобильная · SIM 2 (%s)' "$net_sim2_name" || printf 'Мобильная · SIM 2'
+        else
+          printf 'Мобильная сеть'
+        fi
+      fi
+      ;;
+    *)
+      if [ "$net_transport" = "wifi" ]; then
+        printf 'Wi-Fi · %s' "${net_wifi_ssid:-Unknown}"
+      elif [ "$net_transport" = "mobile" ]; then
+        if [ "$net_sim_slot" = "sim1" ]; then
+          [ -n "$net_sim1_name" ] && printf 'Mobile · SIM 1 (%s)' "$net_sim1_name" || printf 'Mobile · SIM 1'
+        elif [ "$net_sim_slot" = "sim2" ]; then
+          [ -n "$net_sim2_name" ] && printf 'Mobile · SIM 2 (%s)' "$net_sim2_name" || printf 'Mobile · SIM 2'
+        else
+          printf 'Mobile'
+        fi
+      fi
+      ;;
+  esac
+}
+
+get_notif_block_label() {
+  blk_iface="$1"
+  blk_dec=$(eval_autotunnel_decision "$blk_iface" "$net_transport" "$net_wifi_ssid" "$net_sim_slot")
+  [ "$blk_dec" = "stop" ] || return 0
+  if [ "$net_transport" = "wifi" ]; then
+    case "${status_locale:-en}" in
+      zh) printf 'Wi-Fi「%s」命中自动断开规则' "${net_wifi_ssid:-未知}" ;;
+      ru) printf 'Wi-Fi «%s» отключён авто-правилом' "${net_wifi_ssid:-Неизвестно}" ;;
+      *)  printf 'Wi-Fi "%s" paused by Auto-Tunnel' "${net_wifi_ssid:-Unknown}" ;;
+    esac
+  elif [ "$net_transport" = "mobile" ]; then
+    case "${status_locale:-en}" in
+      zh) printf '当前移动网络（%s）设为关闭' "$net_sim_slot" ;;
+      ru) printf 'Мобильная сеть (%s) отключена правилом' "$net_sim_slot" ;;
+      *)  printf 'Mobile (%s) set to Off by Auto-Tunnel' "$net_sim_slot" ;;
+    esac
+  fi
+}
+
+sync_status_notification() {
+  notif_toast="${1:-}"
+  [ "${WGKSU_NO_NOTIF:-0}" = "1" ] && return 0
+  command -v am >/dev/null 2>&1 || return 0
+
+  if [ "$(get_notification_enabled)" != "1" ]; then
+    am broadcast --user 0 -n "${notif_pkg}/.StatusReceiver" -a "${notif_pkg}.CANCEL" >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  ensure_companion_installed || return 0
+  load_status_strings
+  detect_network_state
+
+  n_iface=$(primary_iface_name 2>/dev/null || echo "wg0")
+  n_state="stopped"
+  n_ip4=""
+  n_ip6=""
+  n_mtu=""
+  n_dns=""
+  n_blocked=""
+  n_net=$(format_notif_net_label)
+
+  if [ -n "$n_iface" ] && iface_running "$n_iface"; then
+    n_state="running"
+    n_ip4=$(iface_first_ip4 "$n_iface")
+    n_ip6=$(iface_first_ip6 "$n_iface")
+    n_mtu=$(ip link show "$n_iface" 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="mtu"){print $(i+1); exit}}')
+    find_active_dns_targets
+    if [ -n "$active_dns4" ] && [ -n "$active_dns6" ]; then
+      n_dns="${active_dns4}, ${active_dns6}"
+    elif [ -n "$active_dns4" ]; then
+      n_dns="$active_dns4"
+    elif [ -n "$active_dns6" ]; then
+      n_dns="$active_dns6"
+    fi
+  elif [ -n "$n_iface" ]; then
+    n_blocked=$(get_notif_block_label "$n_iface")
+    if is_manual_paused "$n_iface" && is_autotunnel_enabled_for "$n_iface"; then
+      n_state="paused"
+    fi
+  fi
+
+  am broadcast --user 0 \
+    -n "${notif_pkg}/.StatusReceiver" \
+    -a "${notif_pkg}.UPDATE" \
+    --es state "$n_state" \
+    --es iface "$n_iface" \
+    --es ip4 "$n_ip4" \
+    --es ip6 "$n_ip6" \
+    --es mtu "$n_mtu" \
+    --es dns "$n_dns" \
+    --es net "$n_net" \
+    --es blocked "$n_blocked" \
+    --es toast "$notif_toast" >/dev/null 2>&1 || true
+  notif_ensure_daemon
+  return 0
+}
+
+try_am_start_webui() {
+  comp="$1"
+  am_out=$(am start --user 0 \
+    -n "$comp" \
+    -d "ksu://webui?id=WireGuard-KSU" \
+    --es id "WireGuard-KSU" \
+    --es name "WireGuard" \
+    --es MOD_ID "WireGuard-KSU" 2>&1) || {
+    wg_log notif "am start error for $comp: $(printf '%s' "$am_out" | tr '\r\n' ' ' | cut -c1-160)"
+    return 1
+  }
+  case "$am_out" in
+    *Error:*|*Exception*|*"does not exist"*|*"Unable to resolve"*|*"Permission Denial"*|*"Unknown option"*)
+      wg_log notif "am start rejected $comp: $(printf '%s' "$am_out" | tr '\r\n' ' ' | cut -c1-160)"
+      return 1
+      ;;
+  esac
+  wg_log notif "opened control panel via $comp"
+  return 0
+}
+
+try_am_start_ksu_deeplink() {
+  dl_pkg="$1"
+  dl_prefs="${WGKSU_KSU_PREFS_ROOT:-/data/user/0}/${dl_pkg}/shared_prefs/settings.xml"
+  [ -r "$dl_prefs" ] || return 1
+  dl_tok=$(sed -n 's/.*<string name="intent_token">\([^<]*\)<\/string>.*/\1/p' "$dl_prefs" 2>/dev/null | head -1)
+  [ -n "$dl_tok" ] || return 1
+  am_out=$(am start --user 0 \
+    -a android.intent.action.VIEW \
+    -d "ksu://webui?id=WireGuard-KSU&token=${dl_tok}" \
+    -p "$dl_pkg" 2>&1) || return 1
+  case "$am_out" in
+    *Error:*|*Exception*|*"does not exist"*|*"Unable to resolve"*|*"Permission Denial"*|*"Unknown option"*)
+      return 1
+      ;;
+  esac
+  wg_log notif "opened control panel via ksu deeplink ($dl_pkg)"
+  return 0
+}
+
+find_webui_activity_in_pkg() {
+  f_pkg="$1"
+  command -v dumpsys >/dev/null 2>&1 || return 1
+  dumpsys package "$f_pkg" 2>/dev/null | awk -v p="$f_pkg" '
+    {
+      for (i = 1; i <= NF; i++) {
+        tok = $i
+        gsub(/[},;)]/, "", tok)
+        if (index(tok, p "/") == 1 && tolower(tok) ~ /webuiactivity$/) {
+          print tok
+          exit
+        }
+      }
+    }
+  '
+}
+
+try_pkg_webui() {
+  tp_pkg="$1"
+  tp_primary="${2:-}"
+  if [ -n "$tp_primary" ]; then
+    try_am_start_webui "$tp_primary" && return 0
+  fi
+  exact_comp=$(find_webui_activity_in_pkg "$tp_pkg" || true)
+  if [ -n "$exact_comp" ] && [ "$exact_comp" != "$tp_primary" ]; then
+    try_am_start_webui "$exact_comp" && return 0
+  fi
+  for tp_cand in \
+    "${tp_pkg}/.ui.webui.WebUIActivity" \
+    "${tp_pkg}/me.weishu.kernelsu.ui.webui.WebUIActivity" \
+    "${tp_pkg}/com.rifsxd.ksunext.ui.webui.WebUIActivity" \
+    "${tp_pkg}/com.sukisu.nova.ui.webui.WebUIActivity" \
+    "${tp_pkg}/me.bmax.apatch.ui.WebUIActivity" \
+    "${tp_pkg}/.ui.WebUIActivity" \
+    "${tp_pkg}/.WebUIActivity"; do
+    [ "$tp_cand" = "$tp_primary" ] && continue
+    [ "$tp_cand" = "$exact_comp" ] && continue
+    try_am_start_webui "$tp_cand" && return 0
+  done
+  try_am_start_ksu_deeplink "$tp_pkg" && return 0
+  return 1
+}
+
+open_webui_panel() {
+  command -v am >/dev/null 2>&1 || return 1
+  fallback_pkg=""
+
+  # 1. Try known KernelSU / KernelSU Next / SukiSU / APatch / WebUI-X / MMRL components
+  for pair in \
+    "me.weishu.kernelsu/.ui.webui.WebUIActivity" \
+    "com.rifsxd.ksunext/.ui.webui.WebUIActivity" \
+    "com.sukisu.nova/.ui.webui.WebUIActivity" \
+    "com.sukisu.ultra/.ui.webui.WebUIActivity" \
+    "com.shirkneko.sukisu/.ui.webui.WebUIActivity" \
+    "me.bmax.apatch/.ui.WebUIActivity" \
+    "io.github.a13e300.ksuwebui/.WebUIActivity" \
+    "com.dergoogler.mmrl.wx/.ui.activity.webui.WebUIActivity" \
+    "com.dergoogler.mmrl/.ui.activity.webui.WebUIActivity" \
+    "me.weishu.kernelsu.debug/.ui.webui.WebUIActivity"; do
+    cand_pkg="${pair%%/*}"
+    if command -v pm >/dev/null 2>&1 && pm path "$cand_pkg" >/dev/null 2>&1; then
+      [ -z "$fallback_pkg" ] && fallback_pkg="$cand_pkg"
+      try_pkg_webui "$cand_pkg" "$pair" && return 0
+    fi
+  done
+
+  # 2. Dynamic discovery for custom/renamed KernelSU manager packages
+  dyn_pkgs=""
+  if command -v cmd >/dev/null 2>&1; then
+    q_out=$(cmd package query-activities --brief -a android.intent.action.VIEW -d "ksu://webui?id=WireGuard-KSU" 2>/dev/null || true)
+    r_out=$(cmd package resolve-activity --brief -a android.intent.action.VIEW -d "ksu://webui?id=WireGuard-KSU" 2>/dev/null || true)
+    dyn_pkgs=$(printf '%s\n%s\n' "$q_out" "$r_out" | awk -F/ '/\//{print $1}' | awk 'NF && !seen[$0]++')
+  fi
+  if command -v pm >/dev/null 2>&1; then
+    pm_pkgs=$(pm list packages 2>/dev/null | sed 's/^package://' | grep -iE 'kernelsu|ksunext|sukisu|apatch|ksuwebui|mmrl|kowsu|wksu' || true)
+    if [ -n "$pm_pkgs" ]; then
+      dyn_pkgs=$(printf '%s\n%s\n' "$dyn_pkgs" "$pm_pkgs" | awk 'NF && !seen[$0]++')
+    fi
+  fi
+
+  if [ -n "$dyn_pkgs" ]; then
+    while IFS= read -r dyn_pkg; do
+      [ -n "$dyn_pkg" ] || continue
+      [ -z "$fallback_pkg" ] && fallback_pkg="$dyn_pkg"
+      try_pkg_webui "$dyn_pkg" "" && return 0
+    done <<EOF
+$dyn_pkgs
+EOF
+  fi
+
+  # 3. Last resort: open the discovered manager app directly so tap always gives feedback
+  if [ -n "$fallback_pkg" ] && command -v monkey >/dev/null 2>&1; then
+    monkey -p "$fallback_pkg" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 && {
+      wg_log notif "opened manager app fallback: $fallback_pkg"
+      return 0
+    }
+  fi
+
+  wg_log notif "failed to open WebUI control panel (no compatible manager WebUIActivity found)"
+  return 1
+}
+
+handle_notif_action() {
+  [ -f "$notif_req_file" ] || return 0
+  proc_req="${notif_req_file}.proc.$$"
+  mv -f "$notif_req_file" "$proc_req" 2>/dev/null || return 0
+  act=$(head -1 "$proc_req" 2>/dev/null | tr -d '\r\n ')
+  rm -f "$proc_req"
+
+  case "$act" in
+    open-panel)
+      open_webui_panel || true
+      ;;
+    start)
+      target_iface=$(primary_iface_name 2>/dev/null || true)
+      if [ -n "$target_iface" ] && [ -f "$wg_data/$target_iface.conf" ]; then
+        err_tmp="$wg_data/.notif_start_err.$$"
+        start_rc=0
+        wg_up "$wg_data/$target_iface.conf" "$target_iface" >/dev/null 2>"$err_tmp" || start_rc=$?
+        err_msg=$(head -1 "$err_tmp" 2>/dev/null | tr -d '\r\n')
+        rm -f "$err_tmp"
+        apply_stay_awake_runtime
+        auto_tunnel_ensure_daemon
+        if [ "$start_rc" -ne 0 ]; then
+          sync_status_notification "$err_msg"
+        else
+          update_desc
+        fi
+      else
+        sync_status_notification
+      fi
+      ;;
+    stop)
+      for mp_conf in "$wg_data"/*.conf; do
+        [ -f "$mp_conf" ] || continue
+        mp_if=$(basename "$mp_conf" .conf)
+        set_manual_pause "$mp_if" 1
+      done
+      stop_all >/dev/null 2>&1 || true
+      apply_stay_awake_runtime
+      update_desc
+      auto_tunnel_ensure_daemon
+      ;;
+    resume-auto)
+      load_status_strings
+      auto_tunnel_resume "" >/dev/null 2>&1 || true
+      case "${status_locale:-en}" in
+        zh) res_toast="已恢复网络自动启停" ;;
+        ru) res_toast="Авто-туннель возобновлён" ;;
+        *)  res_toast="Auto-Tunnel resumed" ;;
+      esac
+      sync_status_notification "$res_toast"
+      ;;
+  esac
+}
+
+notif_daemon_running() {
+  [ -f "$notif_pid_file" ] || return 1
+  old_pid=$(cat "$notif_pid_file" 2>/dev/null)
+  case "$old_pid" in
+    ""|*[!0-9]*) return 1 ;;
+  esac
+  kill -0 "$old_pid" 2>/dev/null || return 1
+  if [ -r "/proc/$old_pid/cmdline" ]; then
+    tr '\0' ' ' < "/proc/$old_pid/cmdline" 2>/dev/null | grep -q 'notif-watch' && return 0
+    return 1
+  fi
+  return 0
+}
+
+notif_stop_daemon() {
+  [ -f "$notif_pid_file" ] || return 0
+  if notif_daemon_running; then
+    old_pid=$(cat "$notif_pid_file" 2>/dev/null)
+    kill "$old_pid" 2>/dev/null || true
+  fi
+  rm -f "$notif_pid_file"
+}
+
+notif_ensure_daemon() {
+  [ "${WGKSU_NO_DAEMON:-0}" = "1" ] && return 0
+  [ "${WGKSU_NO_NOTIF:-0}" = "1" ] && return 0
+  command -v am >/dev/null 2>&1 || return 0
+  if [ "$(get_notification_enabled)" != "1" ]; then
+    notif_stop_daemon
+    return 0
+  fi
+  notif_daemon_running && return 0
+  nohup sh "$wgksu_self" notif-watch </dev/null >/dev/null 2>&1 &
+}
+
+notif_watch() {
+  mkdir -p "$wg_data"
+  if notif_daemon_running; then
+    return 0
+  fi
+  printf '%s\n' "$$" > "$notif_pid_file"
+  trap 'rm -f "$notif_pid_file"' 0 1 2 15
+
+  while [ "$(get_notification_enabled)" = "1" ]; do
+    if [ ! -d "$notif_req_dir" ]; then
+      sync_status_notification
+      sleep 2
+      continue
+    fi
+    [ -f "$notif_req_file" ] && handle_notif_action
+
+    # Use `inotifyd -` (stdout pipe, no execve of hook scripts under /data/adb) for 0% CPU & <5ms response
+    if "$busybox" --list 2>/dev/null | grep -qx inotifyd; then
+      "$busybox" inotifyd - "${notif_req_dir}:cny" 2>/dev/null | while IFS= read -r _inotify_ev; do
+        [ -f "$notif_req_file" ] && handle_notif_action
+        [ "$(get_notification_enabled)" = "1" ] || break
+      done
+      sleep 0.5
+    else
+      sleep 0.4
+    fi
   done
 }
 
@@ -1122,16 +3476,26 @@ case "$1" in
     fi
     apply_stay_awake_runtime
     update_desc
+    auto_tunnel_ensure_daemon
+    notif_ensure_daemon
     exit "$command_status"
     ;;
   stop)
     if [ -n "$2" ]; then
+      set_manual_pause "$2" 1
       wg_down "$2"
     else
+      for mp_conf in "$wg_data"/*.conf; do
+        [ -f "$mp_conf" ] || continue
+        mp_if=$(basename "$mp_conf" .conf)
+        set_manual_pause "$mp_if" 1
+      done
       stop_all
     fi
     apply_stay_awake_runtime
     update_desc
+    auto_tunnel_ensure_daemon
+    notif_ensure_daemon
     ;;
   restart)
     command_status=0
@@ -1144,6 +3508,8 @@ case "$1" in
     fi
     apply_stay_awake_runtime
     update_desc
+    auto_tunnel_ensure_daemon
+    notif_ensure_daemon
     exit "$command_status"
     ;;
   status)  show_status ;;
@@ -1191,13 +3557,65 @@ case "$1" in
     reresolve_dns "$2"
     ;;
   repair-routes)
-    repair_endpoint_routes "$2"
+    repair_endpoint_routes "$2" 1
     ;;
   cleanup-route-locks)
     cleanup_boot_endpoint_routes_locks
     ;;
   reresolve-log)
     tail -50 "$reresolve_log" 2>/dev/null || echo "$msg_no_reresolve_log"
+    ;;
+  net-info)
+    print_net_info
+    ;;
+  dns-status)
+    print_dns_status
+    ;;
+  revalidate-net)
+    revalidate_unvalidated_networks 0 || true
+    ;;
+  captive-portal)
+    case "$2" in
+      status|"") get_captive_portal_mode ;;
+      default|cn|ignore) set_captive_portal_mode "$2" ;;
+      *) echo "Usage: wgksu captive-portal {status|default|cn|ignore}" >&2; exit 1 ;;
+    esac
+    ;;
+  notification)
+    case "$2" in
+      enable|on|1|true) set_notification_enabled 1 ;;
+      disable|off|0|false) set_notification_enabled 0 ;;
+      sync) sync_status_notification ;;
+      status|"") get_notification_enabled ;;
+      *) echo "Usage: wgksu notification {enable|disable|status|sync}" >&2; exit 1 ;;
+    esac
+    ;;
+  open-panel)
+    open_webui_panel
+    ;;
+  notif-handle)
+    handle_notif_action
+    ;;
+  notif-ensure)
+    notif_ensure_daemon
+    ;;
+  notif-watch)
+    notif_watch
+    ;;
+  list-wifi)
+    list_saved_wifi_ssids
+    ;;
+  auto-tunnel-apply)
+    auto_tunnel_apply "$2"
+    ;;
+  auto-tunnel-resume)
+    auto_tunnel_resume "$2"
+    ;;
+  auto-tunnel-ensure)
+    auto_tunnel_ensure_daemon
+    ;;
+  auto-tunnel-watch)
+    auto_tunnel_watch
     ;;
   *)       echo "$msg_usage_wgksu" ;;
 esac

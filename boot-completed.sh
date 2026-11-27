@@ -54,7 +54,7 @@ route_table_dump() {
   fi
 
   ip "-$family" route show 2>/dev/null
-  for table in wlan0 eth0 rmnet_data0 rmnet_data1 rmnet_data2 rmnet_data3 rmnet_data4 ccmni0 ccmni1; do
+  for table in wlan0 eth0 rmnet0 rmnet1 rmnet2 rmnet3 rmnet4 v4-rmnet0 v4-rmnet1 v4-rmnet2 rmnet_data0 rmnet_data1 rmnet_data2 rmnet_data3 rmnet_data4 v4-rmnet_data0 v4-rmnet_data1 ccmni0 ccmni1 v4-ccmni0 wwan0; do
     ip "-$family" route show table "$table" 2>/dev/null
   done
 }
@@ -62,12 +62,12 @@ route_table_dump() {
 underlay_default_ready() {
   family="$1"
   route_table_dump "$family" | awk '
-    $1 == "default" {
+    ($1 == "default" || $1 == "0.0.0.0/0" || $1 == "::/0") {
       dev = ""
       for (i = 1; i <= NF; i++) {
         if ($i == "dev") dev = $(i + 1)
       }
-      if (dev ~ /^(wlan|eth|rmnet|ccmni|usb|rndis)/) found = 1
+      if (dev ~ /^(wlan|eth|rmnet|ccmni|v4-rmnet|v4-ccmni|wwan|usb|rndis)/) found = 1
     }
     END { exit found ? 0 : 1 }
   '
@@ -75,9 +75,9 @@ underlay_default_ready() {
 
 resolve_host4() {
   host="$1"
-  addr=$(ping -c1 -W2 "$host" 2>/dev/null | grep -oE '\([0-9]+(\.[0-9]+){3}\)' | head -1 | tr -d '()')
-  [ -n "$addr" ] && echo "$addr" && return
   addr=$(getent hosts "$host" 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+(\.[0-9]+){3}$/) { print $i; exit } }')
+  [ -n "$addr" ] && echo "$addr" && return
+  addr=$(ping -c1 -W1 "$host" 2>/dev/null | grep -oE '\([0-9]+(\.[0-9]+){3}\)' | head -1 | tr -d '()')
   [ -n "$addr" ] && echo "$addr" && return
   addr=$($busybox nslookup "$host" 2>/dev/null | awk '
     /^Name:/ || /^Non-authoritative answer:/ { answer = 1; next }
@@ -97,12 +97,16 @@ resolve_host4() {
 
 resolve_host6() {
   host="$1"
-  if command -v ping6 >/dev/null 2>&1; then
-    addr=$(ping6 -c1 -W2 "$host" 2>/dev/null | grep -oE '([0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:]+' | head -1)
-    [ -n "$addr" ] && echo "$addr" && return
-  fi
   addr=$(getent hosts "$host" 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-Fa-f:]*:[0-9A-Fa-f:]*$/) { print $i; exit } }')
-  [ -n "$addr" ] && echo "$addr" && return
+  is_ipv6 "$addr" && echo "$addr" && return
+  if command -v ping6 >/dev/null 2>&1; then
+    addr=$(ping6 -c1 -W1 "$host" 2>/dev/null | grep -oE '([0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:]+' | head -1)
+    is_ipv6 "$addr" && echo "$addr" && return
+  fi
+  if command -v ping >/dev/null 2>&1; then
+    addr=$(ping -6 -c1 -W1 "$host" 2>/dev/null | grep -oE '([0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:]+' | head -1)
+    is_ipv6 "$addr" && echo "$addr" && return
+  fi
   addr=$($busybox nslookup "$host" 2>/dev/null | awk '
     /^Name:/ || /^Non-authoritative answer:/ { answer = 1; next }
     answer {
@@ -123,6 +127,12 @@ resolve_host6() {
 
 resolve_host() {
   host="$1"
+  if ! underlay_default_ready 4 && underlay_default_ready 6; then
+    addr=$(resolve_host6 "$host")
+    [ -n "$addr" ] && echo "$addr" && return
+    resolve_host4 "$host"
+    return
+  fi
   addr=$(resolve_host4 "$host")
   [ -n "$addr" ] && echo "$addr" && return
   resolve_host6 "$host"
@@ -130,7 +140,7 @@ resolve_host() {
 
 boot_network_ready() {
   conf="$1"
-  endpoints=$(grep -i '^[[:space:]]*Endpoint[[:space:]]*=' "$conf" 2>/dev/null | sed 's/^[^=]*= *//' | tr -d ' ')
+  endpoints=$(grep -i '^[[:space:]]*Endpoint[[:space:]]*=' "$conf" 2>/dev/null | tr -d '\r' | sed 's/#.*$//; s/^[^=]*=[[:space:]]*//' | tr -d ' \t')
 
   [ -z "$endpoints" ] && return 0
 
@@ -200,9 +210,8 @@ start_iface_when_ready() {
 
 (
   until [ "$(getprop sys.boot_completed)" = "1" ]; do
-    sleep 5
+    sleep 1
   done
-  sleep 5
 
   # No lock owner can survive a reboot. Remove locks from older versions or
   # dead owners before starting any interface workers for this boot.
@@ -213,6 +222,24 @@ start_iface_when_ready() {
   for f in "$wg_data"/*.conf; do
     [ -f "$f" ] || continue
     iface=$(basename "$f" .conf)
+    AUTOTUNNEL_ENABLED=0
+    # shellcheck disable=SC1090
+    [ -f "$wg_data/autotunnel.${iface}" ] && . "$wg_data/autotunnel.${iface}" 2>/dev/null
+    if [ "${AUTOTUNNEL_ENABLED:-0}" = "1" ]; then
+      (
+        attempts=0
+        while [ "$attempts" -lt 150 ]; do
+          if underlay_default_ready 4 || underlay_default_ready 6; then
+            break
+          fi
+          attempts=$((attempts + 1))
+          sleep 1
+        done
+        "$WGKSU" auto-tunnel-apply "$iface" >> "$log_file" 2>&1
+      ) &
+      started=1
+      continue
+    fi
     AUTO_START=1
     # shellcheck disable=SC1090
     [ -f "$wg_data/autostart.${iface}" ] && . "$wg_data/autostart.${iface}"
@@ -221,6 +248,12 @@ start_iface_when_ready() {
       started=1
     fi
   done
+
+  # Start auto-tunnel watcher daemon & status bar notification watcher
+  "$WGKSU" auto-tunnel-watch >/dev/null 2>&1 &
+  "$WGKSU" notif-ensure >/dev/null 2>&1
+  "$WGKSU" notification sync >/dev/null 2>&1 &
+
   [ "$started" = "0" ] && { "$WGKSU" status >/dev/null 2>&1; exit 0; }
 
   # update KSU description
@@ -230,20 +263,21 @@ start_iface_when_ready() {
     "$WGKSU" status >/dev/null 2>&1
   fi
 
-  # DNS re-resolve daemon: per-interface
+  # DNS re-resolve & safety-net route repair daemons: per-interface
   for f in "$wg_data"/*.conf; do
     [ -f "$f" ] || continue
     iface=$(basename "$f" .conf)
+    # Periodic route repair runs independently of DNS re-resolve setting
+    (
+      while sleep 30; do
+        "$WGKSU" repair-routes "$iface" 2>/dev/null
+      done
+    ) &
     RERESOLVE_ENABLED=1
     RERESOLVE_INTERVAL=120
     # shellcheck disable=SC1090
     [ -f "$wg_data/reresolve.${iface}" ] && . "$wg_data/reresolve.${iface}"
     if [ "${RERESOLVE_ENABLED:-1}" = "1" ]; then
-      (
-        while sleep 30; do
-          "$WGKSU" repair-routes "$iface" 2>/dev/null
-        done
-      ) &
       (
         while sleep "${RERESOLVE_INTERVAL:-120}"; do
           "$WGKSU" reresolve-dns "$iface" 2>/dev/null

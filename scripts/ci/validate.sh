@@ -9,10 +9,15 @@ uninstall.sh
 wgksu
 translations/en/strings.sh
 translations/ru/strings.sh
+translations/zh/strings.sh
 tests/test_endpoint_route_locks.sh
 tests/test_boot_start.sh
 tests/test_command_mount.sh
 tests/test_localized_description.sh
+tests/test_ipv6_routing.sh
+tests/test_autotunnel.sh
+tests/test_dns_redirect.sh
+tests/test_notification.sh
 tests/helpers/busybox
 tests/helpers/busybox-no-flock
 tests/helpers/delayed-wgksu-holder
@@ -37,4 +42,8 @@ sh tests/test_endpoint_route_locks.sh
 sh tests/test_boot_start.sh
 sh tests/test_command_mount.sh
 sh tests/test_localized_description.sh
+sh tests/test_ipv6_routing.sh
+sh tests/test_autotunnel.sh
+sh tests/test_dns_redirect.sh
+sh tests/test_notification.sh
 python3 tests/test_release_update.py
