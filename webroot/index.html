@@ -1,736 +1,3166 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="auto">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta id="themeColorMeta" name="theme-color" content="#f2f2f7">
 <title>WireGuard</title>
 <style>
 :root {
-  color-scheme: dark;
-  --bg: #111318;
-  --surface: #1b1b20;
-  --surface-container: #202127;
-  --surface-container-high: #2a2b31;
-  --surface-variant: #44464f;
-  --outline: #8e9099;
-  --accent: #c4c6ff;
-  --accent-container: #34366b;
-  --on-accent: #1d1e4f;
-  --green: #a8d5bd;
-  --green-container: #214f3a;
-  --red: #ffb4ab;
-  --red-container: #690005;
-  --yellow: #e7c56e;
-  --text: #e4e1e9;
-  --dim: #c4c6d0;
-  --shape-card: 24px;
-  --shape-control: 999px;
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #e9e9ef;
+  --surface-hover: #f5f5f8;
+  --ink: #111114;
+  --ink-2: #63636a;
+  --ink-3: #8e8e93;
+  --sep: rgba(0, 0, 0, 0.08);
+  --sep-strong: rgba(0, 0, 0, 0.14);
+  --primary-bg: #111114;
+  --primary-ink: #ffffff;
+  --green: #16a34a;
+  --green-soft: rgba(22, 163, 74, 0.11);
+  --switch-on: #34c759;
+  --red: #dc2626;
+  --red-soft: rgba(220, 38, 38, 0.10);
+  --amber: #b45309;
+  --amber-soft: rgba(217, 119, 6, 0.11);
+  --bar-bg: #f2f2f7;
+  --seg-active: #ffffff;
+  --seg-shadow: 0 1px 3px rgba(0, 0, 0, 0.10), 0 0.5px 1px rgba(0, 0, 0, 0.06);
+  --sheet-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --radius-sheet: 16px;
+  --radius-ctrl: 11px;
+  --radius-sm: 8px;
+  --mono: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Roboto", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  --safe-top: var(--safe-area-inset-top, var(--window-inset-top, env(safe-area-inset-top, 0px)));
+  --safe-bottom: var(--safe-area-inset-bottom, var(--window-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  --safe-left: var(--safe-area-inset-left, var(--window-inset-left, env(safe-area-inset-left, 0px)));
+  --safe-right: var(--safe-area-inset-right, var(--window-inset-right, env(safe-area-inset-right, 0px)));
 }
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  max-width: 880px;
-  min-height: 100vh;
-  margin: 0 auto;
-  padding: clamp(16px, 4vw, 32px);
-  background:
-    radial-gradient(ellipse at 50% -18%, rgba(86, 88, 160, .22), transparent 58%),
-    var(--bg);
-  color: var(--text);
-  font-family: Roboto, "Segoe UI", system-ui, sans-serif;
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] {
+    --bg: #0a0a0c;
+    --surface: #151518;
+    --surface-2: #222227;
+    --surface-hover: #1c1c21;
+    --ink: #f5f5f7;
+    --ink-2: #98989f;
+    --ink-3: #63636a;
+    --sep: rgba(255, 255, 255, 0.08);
+    --sep-strong: rgba(255, 255, 255, 0.15);
+    --primary-bg: #f5f5f7;
+    --primary-ink: #0a0a0c;
+    --green: #30d158;
+    --green-soft: rgba(48, 209, 88, 0.14);
+    --switch-on: #30d158;
+    --red: #ff453a;
+    --red-soft: rgba(255, 69, 58, 0.14);
+    --amber: #f59e0b;
+    --amber-soft: rgba(245, 158, 11, 0.14);
+    --bar-bg: #0a0a0c;
+    --seg-active: #2e2e35;
+    --seg-shadow: 0 1px 3px rgba(0, 0, 0, 0.36);
+    --sheet-shadow: none;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0a0a0c;
+  --surface: #151518;
+  --surface-2: #222227;
+  --surface-hover: #1c1c21;
+  --ink: #f5f5f7;
+  --ink-2: #98989f;
+  --ink-3: #63636a;
+  --sep: rgba(255, 255, 255, 0.08);
+  --sep-strong: rgba(255, 255, 255, 0.15);
+  --primary-bg: #f5f5f7;
+  --primary-ink: #0a0a0c;
+  --green: #30d158;
+  --green-soft: rgba(48, 209, 88, 0.14);
+  --switch-on: #30d158;
+  --red: #ff453a;
+  --red-soft: rgba(255, 69, 58, 0.14);
+  --amber: #f59e0b;
+  --amber-soft: rgba(245, 158, 11, 0.14);
+  --bar-bg: #0a0a0c;
+  --seg-active: #2e2e35;
+  --seg-shadow: 0 1px 3px rgba(0, 0, 0, 0.36);
+  --sheet-shadow: none;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: contain;
+  touch-action: manipulation;
 }
-h2 { font-size: 18px; font-weight: 600; letter-spacing: .01em; margin-bottom: 12px; }
-.card {
-  background: var(--surface-container);
-  border: 1px solid rgba(196, 198, 255, .08);
-  border-radius: var(--shape-card);
-  padding: clamp(16px, 3vw, 24px);
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .14);
+
+button, input, textarea {
+  font: inherit;
+  color: inherit;
 }
-.card:first-child { background: linear-gradient(145deg, #292a38, var(--surface-container) 72%); }
-.card > .row:first-child { min-height: 36px; }
-.card > .row:first-child h2 { margin-bottom: 0; }
-.card > .row:first-child #statusBadge {
-  padding: 6px 12px;
-  border: 1px solid var(--surface-variant);
-  border-radius: var(--shape-control);
-  background: rgba(255, 255, 255, .035);
-  color: var(--text);
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Header (opaque solid bg matches status bar seamlessly with zero GPU blur overhead) */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  padding-top: var(--safe-top);
+  background: var(--bar-bg);
+  border-bottom: 1px solid var(--sep);
+}
+
+.topbar-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 10px calc(16px + var(--safe-right)) 0 calc(16px + var(--safe-left));
+}
+
+.topbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 36px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.brand-mark {
+  width: 24px;
+  height: 24px;
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.brand-name {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.header-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--ink-2);
+  padding-left: 4px;
 }
-.status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; }
+.header-status.on { color: var(--green); }
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  flex-shrink: 0;
+}
 .status-dot.on { background: var(--green); }
 .status-dot.off { background: var(--red); }
-.row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; }
-.row.wrap { gap: 12px; flex-wrap: wrap; }
-.btn-group { display: flex; gap: 8px; margin-top: 12px; }
-.btn {
-  min-height: 40px;
-  flex: 1;
-  padding: 9px 16px;
-  border: 1px solid transparent;
-  border-radius: var(--shape-control);
-  font: inherit;
+.status-dot.amber { background: var(--amber); }
+
+.icon-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--ink-2);
+  background: transparent;
+  transition: background-color 0.14s ease, color 0.14s ease, transform 0.12s ease;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--ink); }
+.icon-btn:active { transform: scale(0.93); }
+.icon-btn.danger:hover { background: var(--red-soft); color: var(--red); }
+.icon-btn.spinning svg { animation: spin 0.75s linear infinite; }
+.icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Interface Switcher Strip */
+.iface-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0 11px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.iface-bar::-webkit-scrollbar { display: none; }
+
+.iface-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: .01em;
-  cursor: pointer;
-  transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background-color 0.14s ease, color 0.14s ease, transform 0.12s ease;
 }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn:hover:not(:disabled) { filter: brightness(1.08); }
-.btn:active:not(:disabled) { transform: scale(.98); }
-.btn-start { background: var(--green); color: #10251a; }
-.btn-stop { background: var(--red-container); color: var(--red); }
-.btn-restart { background: var(--accent-container); color: var(--accent); }
-.btn-save { background: var(--accent); color: var(--on-accent); }
-.btn-clear { background: var(--surface-variant); color: var(--text); }
-.toggle { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 500; }
-.toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
-.toggle-hint { margin-top: 8px; font-size: 12px; line-height: 1.55; color: var(--dim); }
-.log, .editor {
-  background: #141519;
-  border: 1px solid rgba(196, 198, 255, .12);
-  border-radius: 16px;
-  padding: 14px;
-  margin-top: 8px;
+.iface-pill:active { transform: scale(0.96); }
+.iface-pill.active {
+  background: var(--primary-bg);
+  color: var(--primary-ink);
+}
+.iface-pill.active .status-dot { background: rgba(128, 128, 128, 0.55); }
+.iface-pill.active .status-dot.on { background: var(--switch-on); }
+.iface-pill.add {
+  background: transparent;
+  border: 1px dashed var(--sep-strong);
+  color: var(--ink-2);
+}
+.iface-pill.add:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* Desktop Top Tabs */
+.desktop-nav {
+  display: none;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 10px;
+  background: var(--surface-2);
+  border-radius: 10px;
+}
+
+.desktop-tab {
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  transition: background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+}
+.desktop-tab:hover { color: var(--ink); }
+.desktop-tab.active {
+  background: var(--seg-active);
+  color: var(--ink);
+  box-shadow: var(--seg-shadow);
+}
+
+/* Main Container */
+.main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px calc(16px + var(--safe-right)) calc(84px + var(--safe-bottom)) calc(16px + var(--safe-left));
+}
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* Section Heading */
+.sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 7px;
+  margin-top: 18px;
+}
+.sec-head:first-child { margin-top: 2px; }
+.sec-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.sec-meta {
   font-size: 12px;
-  font-family: "Roboto Mono", Consolas, monospace;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inset Grouped Sheet (Core Surface Primitive) */
+.sheet {
+  background: var(--surface);
+  border-radius: var(--radius-sheet);
+  border: 1px solid var(--sep);
+  box-shadow: var(--sheet-shadow);
+  overflow: hidden;
+}
+
+.sheet + .sheet { margin-top: 12px; }
+
+.sheet-pad { padding: 16px; }
+
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 16px;
+  min-height: 48px;
+  position: relative;
+}
+.cell + .cell::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  height: 1px;
+  background: var(--sep);
+}
+.cell.clickable {
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.cell.clickable:hover { background: var(--surface-hover); }
+.cell.clickable:active { background: var(--surface-2); }
+
+.cell.stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.cell-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.cell-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.cell-label.muted {
+  color: var(--ink-2);
+  font-weight: 400;
+  flex: 0 0 auto;
+}
+
+.cell-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.cell-val {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  text-align: right;
+  font-size: 13.5px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  word-break: break-all;
+}
+
+/* Status Tags (Minimal, Restrained) */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tag.green { background: var(--green-soft); color: var(--green); }
+.tag.red { background: var(--red-soft); color: var(--red); }
+.tag.amber { background: var(--amber-soft); color: var(--amber); }
+.tag.neutral { background: var(--surface-2); color: var(--ink-2); }
+
+/* Hero Tunnel Sheet */
+.hero-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 14px;
+}
+
+.hero-name {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.hero-meta {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Symmetric Traffic Split (Zero Nested Boxes) */
+.traffic-bar {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  border-top: 1px solid var(--sep);
+  border-bottom: 1px solid var(--sep);
+}
+
+.traffic-col {
+  padding: 12px 16px;
+  min-width: 0;
+}
+
+.traffic-div {
+  background: var(--sep);
+}
+
+.traffic-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--ink-2);
+  margin-bottom: 3px;
+}
+
+.traffic-num {
+  font-size: 17px;
+  font-weight: 700;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.traffic-rate {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-actions {
+  padding: 14px 16px 16px;
+}
+
+/* Strict Geometric Button Grids */
+.btn-grid-1 { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.btn-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius-ctrl);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: opacity 0.14s ease, transform 0.12s ease, background-color 0.14s ease;
+}
+.btn:active:not(:disabled) { transform: scale(0.98); }
+.btn:disabled { opacity: 0.42; cursor: not-allowed; }
+.btn-sm { height: 36px; padding: 0 12px; font-size: 12.5px; border-radius: 9px; }
+
+.btn-primary { background: var(--primary-bg); color: var(--primary-ink); }
+.btn-primary:hover:not(:disabled) { opacity: 0.88; }
+
+.btn-secondary { background: var(--surface-2); color: var(--ink); }
+.btn-secondary:hover:not(:disabled) { opacity: 0.85; }
+
+.btn-danger { background: var(--red-soft); color: var(--red); }
+.btn-danger:hover:not(:disabled) { opacity: 0.85; }
+
+.btn-danger-solid { background: var(--red); color: #ffffff; }
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* Strictly Symmetric Segmented Control (Apple / Linear Style) */
+.seg {
+  display: grid;
+  width: 100%;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface-2);
+  border-radius: 10px;
+}
+.seg.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.seg.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seg.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.seg-btn {
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.seg-btn.active {
+  background: var(--seg-active);
+  color: var(--ink);
+  box-shadow: var(--seg-shadow);
+}
+
+/* Clean Native-Proportioned Toggle Switch (50x30) */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 30px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.switch-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  transition: background-color 0.2s ease;
+}
+.switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+  transition: transform 0.2s cubic-bezier(0.25, 0.9, 0.3, 1);
+}
+.switch input:checked + .switch-track { background: var(--switch-on); }
+.switch input:checked ~ .switch-thumb { transform: translateX(20px); }
+.switch input:disabled + .switch-track,
+.switch input:disabled ~ .switch-thumb { opacity: 0.45; cursor: not-allowed; }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Inputs & SSID Chips */
+.input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  font-size: 13.5px;
+  color: var(--ink);
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+.input:focus {
+  outline: none;
+  background: var(--surface);
+  border-color: var(--sep-strong);
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.ssid-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 11px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+  max-width: 100%;
+}
+.ssid-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ssid-chip button {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+  flex-shrink: 0;
+}
+.ssid-chip button:hover { background: var(--red-soft); color: var(--red); }
+
+.pick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--sep-strong);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+  max-width: 100%;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.pick-chip:hover { background: var(--surface-2); color: var(--ink); }
+.pick-chip.added { opacity: 0.45; cursor: default; }
+
+.cidr-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.cidr-pill {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.cidr-pill.v6 { background: var(--green-soft); color: var(--green); }
+
+/* Code / Config / Logs */
+.code-block {
+  font-family: var(--mono);
+  font-size: 12px;
   line-height: 1.65;
-}
-.log { max-height: 200px; overflow-y: auto; white-space: pre-wrap; color: var(--dim); }
-.editor { color: var(--text); width: 100%; min-height: 200px; resize: vertical; }
-.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--green); color: #10251a; padding: 12px 20px; border-radius: var(--shape-control); font-size: 14px; font-weight: 600; display: none; z-index: 99; box-shadow: 0 4px 16px rgba(0, 0, 0, .35); }
-.toast.error { background: var(--red-container); color: var(--red); }
-
-button:focus-visible, input:focus-visible, textarea:focus-visible, .iface-tab:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
-.info-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-.info-table td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid rgba(196, 198, 255, .1); }
-.info-table td:first-child { color: var(--dim); white-space: nowrap; width: 1%; }
-.info-table td:last-child { word-break: break-all; }
-.info-table tr:last-child td { border-bottom: none; }
+.cfg-line { display: block; min-height: 1.35em; }
+.cfg-sec { color: var(--ink); font-weight: 700; }
+.cfg-key { color: var(--ink-2); font-weight: 600; }
+.cfg-comment { color: var(--ink-3); }
+.cfg-secret { color: var(--ink-3); letter-spacing: 0.08em; }
 
-.peer-card { background: var(--surface-container-high); border: 1px solid rgba(196, 198, 255, .08); border-radius: 18px; padding: 14px; margin-top: 10px; }
-.peer-card .peer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.peer-card .peer-name { font-weight: 600; font-size: 13px; font-family: monospace; word-break: break-all; }
-.peer-card .peer-badge { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: var(--shape-control); }
-.peer-badge.active { background: var(--green-container); color: var(--green); }
-.peer-badge.inactive { background: var(--surface-variant); color: var(--text); }
-.peer-card .peer-detail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; font-size: 12px; }
-.peer-card .peer-detail .dim { color: var(--dim); }
-
-.iface-tab { display: inline-block; padding: 7px 16px; margin-right: 4px; margin-bottom: 8px; border: 1px solid var(--surface-variant); border-radius: var(--shape-control); font-size: 13px; cursor: pointer; background: var(--surface-container-high); color: var(--text); }
-.iface-tab.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
-#reresolveInterval { background: #141519 !important; color: var(--text) !important; border: 1px solid var(--outline) !important; border-radius: 10px !important; padding: 8px 10px !important; }
-#keyResult { background: #141519 !important; border: 1px solid rgba(196, 198, 255, .12); border-radius: 16px !important; line-height: 1.7; overflow-wrap: anywhere; }
-
-@media (max-width: 520px) {
-  body { padding: 12px; }
-  .card { border-radius: 20px; padding: 16px; margin-bottom: 12px; }
-  .btn-group { gap: 6px; }
-  .btn { padding-right: 10px; padding-left: 10px; }
-  .btn-group > .btn { min-width: 0; }
-  .card > .row:first-child { flex-wrap: wrap; }
-  .peer-card .peer-detail { grid-template-columns: 1fr; }
+.editor {
+  width: 100%;
+  min-height: 290px;
+  padding: 14px 16px;
+  border: none;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  resize: vertical;
+  display: block;
 }
+.editor:focus { outline: none; }
+
+.log-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 12px 16px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+}
+.log-line { padding: 2px 0; word-break: break-word; }
+.log-ts { color: var(--ink-3); margin-right: 6px; }
+.log-tag { color: var(--ink); font-weight: 600; margin-right: 6px; }
+.log-err { color: var(--red); }
+.log-warn { color: var(--amber); }
+.log-ok { color: var(--green); }
+
+/* Notice Banner (Quiet, Single-Line Feel) */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+.notice.ok { background: var(--green-soft); color: var(--green); }
+.notice.warn { background: var(--amber-soft); color: var(--amber); }
+.notice.error { background: var(--red-soft); color: var(--red); }
+.notice svg { flex-shrink: 0; margin-top: 1px; }
+
+/* Empty State */
+.empty {
+  text-align: center;
+  padding: 36px 20px;
+}
+.empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.empty-desc {
+  font-size: 13px;
+  color: var(--ink-2);
+  max-width: 340px;
+  margin: 0 auto 16px;
+}
+
+/* Mobile Bottom Bar (solid bg eliminates 120Hz WebView blur scroll jank) */
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 6px calc(8px + var(--safe-right)) calc(6px + var(--safe-bottom)) calc(8px + var(--safe-left));
+  background: var(--bar-bg);
+  border-top: 1px solid var(--sep);
+}
+
+.bnav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 48px;
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-weight: 600;
+  touch-action: manipulation;
+  transition: color 0.1s ease;
+}
+.bnav-btn.active { color: var(--ink); }
+
+/* Modal / Bottom Sheet */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.48);
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+}
+.backdrop.open { display: flex; }
+
+.modal {
+  width: 100%;
+  max-width: 440px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--sep-strong);
+  border-radius: 20px;
+  padding: 18px;
+  margin-bottom: var(--safe-bottom);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  animation: rise 0.18s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.modal-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.modal-desc { font-size: 13.5px; color: var(--ink-2); line-height: 1.5; margin-bottom: 16px; }
+
+.radio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+.radio-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  background: var(--surface);
+  border: 1px solid var(--sep);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.radio-opt input { width: 16px; height: 16px; accent-color: var(--ink); }
+
+/* Toast */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(74px + var(--safe-bottom));
+  transform: translateX(-50%) translateY(10px);
+  z-index: 95;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.error { background: var(--red); color: #ffffff; }
+
+@media (min-width: 681px) {
+  .desktop-nav { display: grid; }
+  .bottom-bar { display: none; }
+  .main { padding: 20px 16px 40px; }
+  .backdrop { align-items: center; }
+  .modal { margin-bottom: 0; }
+  .toast { bottom: 24px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 </style>
 </head>
 <body>
 
-<div class="card">
-  <div class="row">
-    <h2>WireGuard</h2>
-    <span id="statusBadge"><span class="status-dot off"></span><span data-i18n="checking">Checking...</span></span>
-  </div>
-  <div id="ifaceTabs"></div>
-  <div id="ifaceInfo"></div>
-  <div class="btn-group">
-    <button class="btn btn-start" onclick="control('start')" data-i18n="btnStart">Start</button>
-    <button class="btn btn-stop" onclick="control('stop')" data-i18n="btnStop">Stop</button>
-    <button class="btn btn-restart" onclick="control('restart')" data-i18n="btnRestart">Restart</button>
-  </div>
-</div>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-row">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9.5 12.2 11.3 14l3.5-3.8"/></svg>
+        </div>
+        <span class="brand-name" data-i18n="appTitle">WireGuard</span>
+        <span id="headerStatus" class="header-status"><span class="status-dot"></span><span data-i18n="checking">Checking</span></span>
+      </div>
+      <div class="icon-actions">
+        <button id="refreshBtn" class="icon-btn" type="button" aria-label="Refresh">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+        </button>
+        <button id="openSettingsBtn" class="icon-btn" type="button" aria-label="Settings">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </div>
 
-<div class="card">
-  <h2 data-i18n="peersTitle">Peers</h2>
-  <div id="peers"><div style="color:var(--dim);padding:8px" data-i18n="loading">Loading...</div></div>
-</div>
+    <div id="ifaceBar" class="iface-bar" role="tablist" aria-label="Interfaces"></div>
 
-<div class="card">
-  <div class="row">
-    <h2 data-i18n="configTitle">Config</h2>
-    <button class="btn btn-save" style="flex:none;padding:6px 16px" onclick="toggleEdit()" id="editBtn" data-i18n="btnEdit">Edit</button>
-    <button class="btn btn-clear" style="flex:none;padding:6px 16px;margin-left:4px" onclick="deleteConfig()" id="deleteBtn" data-i18n="btnDelete">Delete</button>
+    <nav class="desktop-nav" role="tablist" aria-label="Navigation">
+      <button class="desktop-tab active" data-tab="overview" role="tab" aria-selected="true" data-i18n="tabOverview">Overview</button>
+      <button class="desktop-tab" data-tab="auto" role="tab" aria-selected="false" data-i18n="tabAuto">Auto</button>
+      <button class="desktop-tab" data-tab="config" role="tab" aria-selected="false" data-i18n="tabConfig">Config</button>
+      <button class="desktop-tab" data-tab="logs" role="tab" aria-selected="false" data-i18n="tabLogs">Logs</button>
+    </nav>
   </div>
-  <div class="row wrap">
-    <label class="toggle">
-      <input type="checkbox" id="autoStartToggle" onchange="saveAutoStart(this.checked)">
-      <span data-i18n="bootAutoStart">Boot Auto Start</span>
-    </label>
-    <span id="autoStartStatus" style="font-size:13px;color:var(--dim)" data-i18n="loading">Loading...</span>
-  </div>
-  <div class="toggle-hint" data-i18n="bootAutoStartHint">Controls whether WireGuard starts automatically after boot.</div>
-  <div class="row wrap" style="margin-top:10px">
-    <label class="toggle">
-      <input type="checkbox" id="stayAwakeToggle" onchange="saveStayAwake(this.checked)">
-      <span data-i18n="stayAwake">Stay Awake</span>
-    </label>
-    <span id="stayAwakeStatus" style="font-size:13px;color:var(--dim)" data-i18n="loading">Loading...</span>
-  </div>
-  <div class="toggle-hint" data-i18n="stayAwakeHint">Keeps this interface reachable while the screen is off by holding a device-wide wakelock and Wi-Fi hi-perf mode. Increases battery use.</div>
-  <div style="margin-top:12px">
-    <button class="btn btn-clear" style="flex:none;padding:8px 16px;font-size:13px" onclick="genKey()" data-i18n="btnGenKey">🔑 Generate Keypair</button>
-    <div id="keyResult" style="display:none;margin-top:8px;background:#0d1117;border-radius:8px;padding:10px;font-size:12px;font-family:monospace">
-      <div style="margin-bottom:6px"><span style="color:var(--dim)" data-i18n="privateKey">Private Key:</span> <span id="keyPriv" style="user-select:all"></span></div>
-      <div><span style="color:var(--dim)" data-i18n="publicKey">Public Key:</span> <span id="keyPub" style="user-select:all"></span></div>
+</header>
+
+<main class="main">
+  <div id="bridgeNotice" class="notice error" style="display:none"></div>
+
+  <!-- TAB 1: OVERVIEW -->
+  <section id="panel-overview" class="panel active">
+    <div id="overviewBody"></div>
+  </section>
+
+  <!-- TAB 2: AUTO-TUNNEL & INTERFACE AUTOMATION -->
+  <section id="panel-auto" class="panel">
+    <div id="autoBody"></div>
+  </section>
+
+  <!-- TAB 3: CONFIG -->
+  <section id="panel-config" class="panel">
+    <div id="configHint" style="display:none"></div>
+
+    <div class="sec-head">
+      <span class="sec-title" id="configFileTitle" data-i18n="configTitle">Configuration</span>
+      <div class="icon-actions">
+        <button id="toggleSecretBtn" class="icon-btn" type="button" aria-label="Toggle secrets">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        <button id="copyConfigBtn" class="icon-btn" type="button" aria-label="Copy config">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button id="deleteConfigBtn" class="icon-btn danger" type="button" aria-label="Delete config">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="sheet">
+      <div id="configViewWrap">
+        <div id="configView" class="code-block" data-i18n="loading">Loading...</div>
+        <div class="sheet-pad" style="border-top:1px solid var(--sep)">
+          <div class="btn-grid-1">
+            <button id="editConfigBtn" class="btn btn-primary" type="button" data-i18n="btnEdit">Edit Config</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="configEditWrap" style="display:none">
+        <textarea id="configEditor" class="editor" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+        <div id="editorValidationWrap" style="display:none;padding:0 16px 12px">
+          <div id="editorValidation" class="notice warn" style="margin-bottom:0"></div>
+        </div>
+        <div class="sheet-pad" style="border-top:1px solid var(--sep);display:flex;flex-direction:column;gap:8px">
+          <div class="btn-grid-2">
+            <button id="saveConfigBtn" class="btn btn-secondary" type="button" data-i18n="btnSave">Save</button>
+            <button id="saveRestartBtn" class="btn btn-primary" type="button" data-i18n="btnSaveRestart">Save &amp; Restart</button>
+          </div>
+          <div class="btn-grid-1">
+            <button id="cancelEditBtn" class="btn btn-secondary" type="button" data-i18n="btnCancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-head">
+      <span class="sec-title" data-i18n="keypairTitle">Keypair Generator</span>
+    </div>
+    <div class="sheet">
+      <div class="sheet-pad">
+        <div id="keyActionGrid" class="btn-grid-1">
+          <button id="genKeyBtn" class="btn btn-secondary" type="button" data-i18n="btnGenKey">Generate Keypair</button>
+          <button id="insertPrivKeyBtn" class="btn btn-primary" type="button" style="display:none" data-i18n="btnInsertPrivKey">Use Private Key</button>
+        </div>
+      </div>
+      <div id="keyResult" style="display:none;border-top:1px solid var(--sep)">
+        <div id="keyPrivRow" class="cell clickable">
+          <span class="cell-label muted" data-i18n="privateKey">Private Key</span>
+          <span id="keyPriv" class="cell-val mono"></span>
+        </div>
+        <div id="keyPubRow" class="cell clickable">
+          <span class="cell-label muted" data-i18n="publicKey">Public Key</span>
+          <span id="keyPub" class="cell-val mono"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 4: LOGS & DIAGNOSTICS -->
+  <section id="panel-logs" class="panel">
+    <div class="seg cols-3" id="logSubTabs" style="margin-bottom:14px">
+      <button class="seg-btn active" type="button" data-logtab="diag" data-i18n="diagTab">Diagnostics</button>
+      <button class="seg-btn" type="button" data-logtab="runtime" data-i18n="runtimeLogTitle">Runtime Log</button>
+      <button class="seg-btn" type="button" data-logtab="dns" data-i18n="reresolveLog">DNS Log</button>
+    </div>
+
+    <div id="logPanelDiag"></div>
+
+    <div id="logPanelRuntime" style="display:none">
+      <div style="margin-bottom:10px">
+        <input id="logFilterInput" class="input" type="search" placeholder="Filter...">
+      </div>
+      <div class="sheet">
+        <div id="runtimeLogBox" class="log-scroll"></div>
+        <div class="sheet-pad" style="border-top:1px solid var(--sep)">
+          <div class="btn-grid-2">
+            <button id="copyRuntimeLogBtn" class="btn btn-secondary" type="button" data-i18n="btnCopyLog">Copy Log</button>
+            <button id="clearRuntimeLogBtn" class="btn btn-danger" type="button" data-i18n="btnClearLog">Clear Log</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="logPanelDns" style="display:none">
+      <div class="sheet">
+        <div id="dnsLogBox" class="log-scroll"></div>
+        <div class="sheet-pad" style="border-top:1px solid var(--sep)">
+          <div class="btn-grid-2">
+            <button id="copyDnsLogBtn" class="btn btn-secondary" type="button" data-i18n="btnCopyLog">Copy Log</button>
+            <button id="clearDnsLogBtn" class="btn btn-danger" type="button" data-i18n="btnClearLog">Clear Log</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="bottom-bar" role="tablist" aria-label="Navigation">
+  <button class="bnav-btn active" data-tab="overview" role="tab" aria-selected="true">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    <span data-i18n="tabOverview">Overview</span>
+  </button>
+  <button class="bnav-btn" data-tab="auto" role="tab" aria-selected="false">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+    <span data-i18n="tabAuto">Auto</span>
+  </button>
+  <button class="bnav-btn" data-tab="config" role="tab" aria-selected="false">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    <span data-i18n="tabConfig">Config</span>
+  </button>
+  <button class="bnav-btn" data-tab="logs" role="tab" aria-selected="false">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+    <span data-i18n="tabLogs">Logs</span>
+  </button>
+</nav>
+
+<!-- Global Settings Modal -->
+<div id="settingsModal" class="backdrop" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div id="settingsModalTitle" class="modal-title" data-i18n="globalSettings">Settings</div>
+      <button id="closeSettingsBtn" class="btn btn-secondary btn-sm" type="button" data-i18n="btnClose">Done</button>
+    </div>
+
+    <div class="sec-head" style="margin-top:0">
+      <span class="sec-title" data-i18n="moduleSettingsTitle">Module Settings</span>
+      <span id="mountMeta" class="sec-meta"></span>
+    </div>
+    <div class="sheet" style="margin-bottom:14px">
+      <div class="cell">
+        <div class="cell-left">
+          <div class="cell-label" data-i18n="notifToggleText">Status bar notification</div>
+          <div class="cell-sub" data-i18n="notifHint">Shows live tunnel status with one-tap start/stop and panel shortcut.</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="notifToggle" checked>
+          <span class="switch-track"></span>
+          <span class="switch-thumb"></span>
+        </label>
+      </div>
+      <div class="cell stack">
+        <div class="cell-left">
+          <div class="cell-label" data-i18n="captivePortalTitle">Connectivity check (! fix)</div>
+          <div class="cell-sub" data-i18n="captivePortalHint">Uses a China-reachable 204 probe so Pixel clears "!" right after reboot while keeping captive portals working.</div>
+        </div>
+        <div class="seg cols-3" id="captivePortalSeg">
+          <button class="seg-btn active" type="button" data-captive-val="default" data-i18n="captiveDefault">Default</button>
+          <button class="seg-btn" type="button" data-captive-val="cn" data-i18n="captiveCn">CN Probe</button>
+          <button class="seg-btn" type="button" data-captive-val="ignore" data-i18n="captiveIgnore">Disable</button>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="cell-left">
+          <div class="cell-label" data-i18n="cmdMountToggleText">Mount wg / wgksu commands</div>
+          <div id="commandMountHint" class="cell-sub" data-i18n="cmdMountHint">Adds wg and wgksu to /system/bin.</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="commandMountToggle" disabled>
+          <span class="switch-track"></span>
+          <span class="switch-thumb"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="sec-head">
+      <span class="sec-title" data-i18n="uiSettingsTitle">WebUI Preferences</span>
+    </div>
+    <div class="sheet">
+      <div class="cell stack">
+        <div class="cell-label" data-i18n="refreshIntervalLabel">Auto Refresh</div>
+        <div class="seg cols-4" id="refreshSeg">
+          <button class="seg-btn" type="button" data-refresh="5000">5s</button>
+          <button class="seg-btn" type="button" data-refresh="10000">10s</button>
+          <button class="seg-btn" type="button" data-refresh="30000">30s</button>
+          <button class="seg-btn" type="button" data-refresh="0" data-i18n="refreshOff">Off</button>
+        </div>
+      </div>
+      <div class="cell stack">
+        <div class="cell-label" data-i18n="themeLabel">Theme</div>
+        <div class="seg cols-3" id="themeSeg">
+          <button class="seg-btn" type="button" data-theme-val="auto" data-i18n="themeAuto">Auto</button>
+          <button class="seg-btn" type="button" data-theme-val="light" data-i18n="themeLight">Light</button>
+          <button class="seg-btn" type="button" data-theme-val="dark" data-i18n="themeDark">Dark</button>
+        </div>
+      </div>
+      <div class="cell stack">
+        <div class="cell-label" data-i18n="languageLabel">Language</div>
+        <div class="seg cols-4" id="langSeg">
+          <button class="seg-btn" type="button" data-lang-val="auto" data-i18n="langAuto">Auto</button>
+          <button class="seg-btn" type="button" data-lang-val="zh-CN">简体中文</button>
+          <button class="seg-btn" type="button" data-lang-val="en">EN</button>
+          <button class="seg-btn" type="button" data-lang-val="ru">RU</button>
+        </div>
+      </div>
     </div>
   </div>
-  <div id="configView" class="log" data-i18n="loading">Loading...</div>
-  <textarea id="configEdit" class="editor" style="display:none"></textarea>
-  <div id="configBtns" class="btn-group" style="display:none">
-    <button class="btn btn-save" onclick="saveConfig()" data-i18n="btnSave">Save</button>
-    <button class="btn btn-restart" onclick="saveAndRestart()" data-i18n="btnSaveRestart">Save & Restart</button>
-    <button class="btn btn-stop" onclick="cancelEdit()" data-i18n="btnCancel">Cancel</button>
+</div>
+
+<!-- New Interface Modal -->
+<div id="newIfaceModal" class="backdrop" role="dialog" aria-modal="true" aria-labelledby="newIfaceModalTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div id="newIfaceModalTitle" class="modal-title" data-i18n="modalNewTitle">New Interface</div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div class="sec-head" style="margin-top:0"><label class="sec-title" for="newIfaceName" data-i18n="modalNewNameLabel">Interface name</label></div>
+      <input id="newIfaceName" class="input" type="text" maxlength="15" autocomplete="off" spellcheck="false" placeholder="wg0">
+    </div>
+    <div style="margin-bottom:16px">
+      <div class="sec-head" style="margin-top:0"><span class="sec-title" data-i18n="modalNewTemplateLabel">Template</span></div>
+      <div class="radio-list">
+        <label class="radio-opt">
+          <input type="radio" name="newIfaceTpl" value="dual" checked>
+          <span data-i18n="templateDualStack">Dual-Stack Full Tunnel (IPv4 + IPv6)</span>
+        </label>
+        <label class="radio-opt">
+          <input type="radio" name="newIfaceTpl" value="split">
+          <span data-i18n="templateSplitV4">Split Tunnel (IPv4 Only)</span>
+        </label>
+      </div>
+    </div>
+    <div class="btn-grid-2">
+      <button id="modalNewCancel" class="btn btn-secondary" type="button" data-i18n="btnCancel">Cancel</button>
+      <button id="modalNewCreate" class="btn btn-primary" type="button" data-i18n="btnCreate">Create &amp; Edit</button>
+    </div>
   </div>
 </div>
 
-<div class="card">
-  <div class="row">
-    <h2 data-i18n="dnsTitle">DNS Re-resolve</h2>
-    <button class="btn btn-start" style="flex:none;padding:6px 16px" onclick="triggerReresolve()" data-i18n="btnRunNow">Run Now</button>
+<!-- Delete Modal -->
+<div id="deleteIfaceModal" class="backdrop" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div id="deleteModalTitle" class="modal-title" data-i18n="modalDeleteTitle">Delete Config</div>
+    </div>
+    <div id="deleteModalDesc" class="modal-desc"></div>
+    <div class="btn-grid-2">
+      <button id="modalDelCancel" class="btn btn-secondary" type="button" data-i18n="btnCancel">Cancel</button>
+      <button id="modalDelConfirm" class="btn btn-danger-solid" type="button" data-i18n="btnDelete">Delete</button>
+    </div>
   </div>
-  <div class="row wrap">
-    <label class="toggle">
-      <input type="checkbox" id="reresolveToggle" onchange="saveReresolve()">
-      <span data-i18n="autoReresolve">Auto Re-resolve</span>
-    </label>
-    <span id="reresolveStatus" style="font-size:13px;color:var(--dim)" data-i18n="loading">Loading...</span>
-  </div>
-  <div class="toggle-hint" data-i18n="autoReresolveHint">Periodically re-resolve domain endpoints and update peers when IP changes. Requires reboot to take effect.</div>
-  <div class="row" style="margin-top:10px;gap:8px">
-    <label style="font-size:13px;white-space:nowrap" data-i18n="intervalSec">Interval (sec)</label>
-    <input type="number" id="reresolveInterval" min="30" max="3600" value="120" style="width:80px;padding:6px 8px;border-radius:6px;border:1px solid #333;background:#0d1117;color:var(--text);font-size:13px">
-    <button class="btn btn-save" style="flex:none;padding:6px 16px" onclick="saveReresolve()" data-i18n="btnSave">Save</button>
-  </div>
-  <div class="row" style="margin-top:8px">
-    <span style="font-size:13px;color:var(--dim)" data-i18n="reresolveLog">Re-resolve Log</span>
-    <button class="btn btn-clear" style="flex:none;padding:4px 12px;font-size:12px" onclick="clearReresolveLog()" data-i18n="btnClear">Clear</button>
-  </div>
-  <div id="reresolveLog" class="log" style="max-height:150px" data-i18n="loading">Loading...</div>
 </div>
 
-<div class="card">
-  <div class="row">
-    <h2 data-i18n="runtimeLogTitle">Runtime Log</h2>
-    <button class="btn btn-clear" style="flex:none;padding:6px 16px" onclick="clearLog()" data-i18n="btnClear">Clear</button>
-  </div>
-  <div class="toggle-hint" data-i18n="runtimeLogHint">Recent startup, route maintenance, warning and error messages across all interfaces. Messages such as "wg0 up" indicate a successful startup.</div>
-  <div id="log" class="log" data-i18n="loading">Loading...</div>
-</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<div class="card">
-  <h2 data-i18n="cmdMountTitle">Shell Command Mount</h2>
-  <div class="row wrap">
-    <label class="toggle">
-      <input type="checkbox" id="commandMountToggle" onchange="saveCommandMount(this.checked)" disabled>
-      <span data-i18n="cmdMountToggleText">Mount wg / wgksu commands</span>
-    </label>
-    <span id="commandMountStatus" style="font-size:13px;color:var(--dim)" data-i18n="loading">Loading...</span>
-  </div>
-  <div class="toggle-hint" id="commandMountHint" data-i18n="cmdMountHint">Adds wg and wgksu to the system command path for terminals. Off by default; WireGuard and WebUI work with this off. Changes take effect after reboot.</div>
-</div>
+<script>
+(() => {
+  'use strict';
 
-<div id="toast" class="toast"></div>
-
-<script type="module">
-import { exec } from 'https://esm.sh/kernelsu';
-
-let translations = {};
-
-async function initLocalization() {
-  const language = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split(/[-_]/)[0];
-  const supportedLocales = new Map([['ru', 'ru'], ['zh', 'zh-CN']]);
-  const preferredLocale = supportedLocales.get(language) || 'en';
-  const locales = preferredLocale === 'en' ? ['en'] : [preferredLocale, 'en'];
-
-  for (const locale of locales) {
-    try {
-      const response = await fetch(`./locales/${locale}.json`);
-      if (!response.ok) continue;
-      translations = await response.json();
-      document.documentElement.lang = locale;
-      break;
-    } catch {
-      // Try the next locale if the download or JSON parsing fails.
-    }
-  }
-
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const key = el.getAttribute('data-i18n');
-    if (translations[key]) {
-      el.textContent = translations[key];
-    }
-  });
-}
-
-function t(key, vars = {}) {
-  let text = translations[key] || key;
-  for (const [k, v] of Object.entries(vars)) {
-    text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
-  }
-  return text;
-}
-
-const WG_DATA = '/data/adb/wireguard';
-let currentIface = '';
-const wgCmd = WG_DATA + '/wg';
-const wgksuCmd = WG_DATA + '/wgksu';
-let commandMountSaving = false;
-
-async function run(cmd) {
+  // Request seamless edge-to-edge status/navigation bar immersion in KernelSU / SukiSU / WebUI-X
   try {
-    const { errno, stdout, stderr } = await exec(cmd);
-    return { errno, stdout: stdout || '', stderr: stderr || '' };
-  } catch(e) {
-    return { errno: -1, stdout: '', stderr: e.message };
-  }
-}
+    if (window.ksu && typeof window.ksu.enableEdgeToEdge === 'function') {
+      window.ksu.enableEdgeToEdge(true);
+    }
+  } catch {}
 
-async function refreshCommandMount() {
-  if (commandMountSaving) return;
-  const [r, support] = await Promise.all([
-    run(`${wgksuCmd} mount status`),
-    run(`${wgksuCmd} mount supported`)
-  ]);
-  if (commandMountSaving) return;
-  const value = r.stdout.trim();
-  const toggle = document.getElementById('commandMountToggle');
-  const status = document.getElementById('commandMountStatus');
-  const hint = document.getElementById('commandMountHint');
-  const available = support.stdout.trim();
-  if (r.errno !== 0 || support.errno !== 0 || !['0', '1'].includes(value) || !['0', '1'].includes(available)) {
-    toggle.disabled = true;
-    status.textContent = t('unavailableStatus');
-    hint.textContent = t('cannotCheckMount');
-    return;
-  }
-  if (available === '0') {
-    toggle.checked = false;
-    toggle.disabled = true;
-    status.textContent = t('unavailableNoProvider');
-    hint.textContent = t('mountProviderHint');
-    return;
-  }
-  toggle.checked = value === '1';
-  toggle.disabled = false;
-  status.textContent = toggle.checked ? t('configuredOn') : t('configuredOff');
-  hint.textContent = t('cmdMountHint');
-}
+  const WG_DATA = '/data/adb/wireguard';
+  const WG_CMD = `${WG_DATA}/wg`;
+  const WGKSU_CMD = `${WG_DATA}/wgksu`;
+  const IFACE_RE = /^[a-zA-Z0-9_-]{1,15}$/;
 
-window.saveCommandMount = async function(enabled) {
-  commandMountSaving = true;
-  const toggle = document.getElementById('commandMountToggle');
-  const status = document.getElementById('commandMountStatus');
-  toggle.disabled = true;
-  status.textContent = t('savingStatus');
-  const r = await run(`${wgksuCmd} mount ${enabled ? 'enable' : 'disable'}`);
-  commandMountSaving = false;
-  await refreshCommandMount();
-  if (r.errno === 0) {
-    toast(t('mountSaved'));
-  } else {
-    toast(t('saveFailed') + (r.stderr || r.stdout), true);
-  }
-};
+  const FALLBACK_I18N = {
+    appTitle: 'WireGuard', checking: 'Checking', loading: 'Loading...',
+    runningStatus: 'Running', stoppedStatus: 'Stopped', noConfigs: 'No configs'
+  };
 
-function stripAnsi(tStr) {
-  return String(tStr||'').replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g,'').replace(/\x1B[@-_]/g,'');
-}
+  let translations = { ...FALLBACK_I18N };
+  let cbSeq = 0;
+  let toastTimer = null;
+  let pollTimer = null;
+  let inFlight = false;
+  let queued = false;
+  let lastInteractAt = 0;
+  let lastFullSyncAt = 0;
 
-function toast(msg, isError) {
-  const toastEl = document.getElementById('toast');
-  toastEl.textContent = msg;
-  toastEl.className = isError ? 'toast error' : 'toast';
-  toastEl.style.display = 'block';
-  setTimeout(() => toastEl.style.display = 'none', 2500);
-}
+  const state = {
+    tab: 'overview',
+    logTab: 'diag',
+    ifaces: [],
+    runningIfaces: [],
+    currentIface: '',
+    snapshot: null,
+    editing: false,
+    showSecrets: false,
+    busyAction: '',
+    savedWifi: null,
+    savedWifiLoading: false,
+    autoDraft: { iface: '', dirty: false, enabled: false, wifiMode: 'ignore', ssids: [], sim1: 'ignore', sim2: 'ignore' },
+    mount: { loaded: false, saving: false, available: false, enabled: false, error: false },
+    rates: { iface: '', ts: 0, rx: 0, tx: 0, rxRate: 0, txRate: 0, peers: {} },
+    prefs: {
+      refreshMs: parseInt(localStorage.getItem('wgksu_refresh') || '5000', 10),
+      theme: localStorage.getItem('wgksu_theme') || 'auto',
+      lang: localStorage.getItem('wgksu_lang') || 'auto'
+    },
+    cache: { strip: '', overview: '', overviewStruct: '', auto: '', config: '', runtimeLog: '', dnsLog: '', diag: '' },
+    lastGenKeys: null
+  };
 
-function humanBytes(b) {
-  if (b < 1024) return b + ' B';
-  if (b < 1048576) return (b/1024).toFixed(1) + ' KiB';
-  if (b < 1073741824) return (b/1048576).toFixed(1) + ' MiB';
-  return (b/1073741824).toFixed(2) + ' GiB';
-}
-
-function timeAgo(ts) {
-  if (!ts || ts === '0') return t('neverLabel');
-  const sec = Math.floor(Date.now()/1000) - parseInt(ts);
-  if (sec < 60) return t('secondsAgo', { value: sec });
-  if (sec < 3600) return t('minutesAgo', { value: Math.floor(sec/60) });
-  if (sec < 86400) return t('hoursAgo', { value: Math.floor(sec/3600) });
-  return t('daysAgo', { value: Math.floor(sec/86400) });
-}
-
-function parseWgShow(text) {
-  const result = { iface: {}, peers: [] };
-  let current = null;
-  for (const line of text.split('\n')) {
-    const m = line.match(/^(\s*)(\S.+?):\s*(.*)$/);
-    if (!m) continue;
-    const [, indent, key, val] = m;
-    if (!indent || indent.length === 0) {
-      if (key.startsWith('peer')) {
-        current = { publicKey: val };
-        result.peers.push(current);
-      } else {
-        current = null;
+  // --- Built-in Offline KernelSU / APatch Bridge (Zero CDN) ---
+  function execBridge(command, options = {}) {
+    if (typeof window.__WGKSU_MOCK_EXEC__ === 'function') {
+      return Promise.resolve(window.__WGKSU_MOCK_EXEC__(command, options));
+    }
+    return new Promise((resolve, reject) => {
+      if (typeof window.ksu === 'undefined' || typeof window.ksu.exec !== 'function') {
+        reject(new Error('BRIDGE_UNAVAILABLE'));
+        return;
       }
-    } else if (current) {
-      current[key.replace(/\s+/g,'')] = val;
+      const cb = `wgksu_cb_${Date.now()}_${cbSeq++}`;
+      window[cb] = (errno, stdout, stderr) => {
+        delete window[cb];
+        resolve({ errno: Number(errno), stdout: stdout || '', stderr: stderr || '' });
+      };
+      try {
+        window.ksu.exec(command, JSON.stringify(options), cb);
+      } catch (err) {
+        delete window[cb];
+        reject(err);
+      }
+    });
+  }
+
+  async function run(cmd, timeoutMs = 15000) {
+    try {
+      const p = execBridge(cmd);
+      const r = timeoutMs > 0
+        ? await Promise.race([p, new Promise((res) => setTimeout(() => res({ errno: -2, stdout: '', stderr: 'TIMEOUT' }), timeoutMs))])
+        : await p;
+      return {
+        errno: r && typeof r.errno === 'number' ? r.errno : -1,
+        stdout: r && r.stdout ? String(r.stdout) : '',
+        stderr: r && r.stderr ? String(r.stderr) : ''
+      };
+    } catch (err) {
+      return { errno: -1, stdout: '', stderr: err && err.message ? err.message : String(err) };
+    }
+  }
+
+  // --- Utilities ---
+  function t(key, vars = {}) {
+    let text = translations[key] ?? FALLBACK_I18N[key] ?? key;
+    for (const [k, v] of Object.entries(vars)) {
+      text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+    }
+    return text;
+  }
+
+  function esc(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function stripAnsi(s) {
+    return String(s || '').replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1B[@-_]/g, '');
+  }
+
+  function safeIface(name) {
+    return typeof name === 'string' && IFACE_RE.test(name) ? name : '';
+  }
+
+  function makeSentinel(content) {
+    let tag = 'WGKSU_EOF_' + Math.random().toString(36).slice(2, 10).toUpperCase();
+    while (content.includes(tag)) tag += 'X';
+    return tag;
+  }
+
+  function toast(msg, isError = false) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = isError ? 'toast error show' : 'toast show';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+  }
+
+  async function copyText(text) {
+    if (!text) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        toast(t('copiedToast'));
+        return;
+      }
+    } catch {}
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      toast(ok ? t('copiedToast') : t('copyFailed'), !ok);
+    } catch {
+      toast(t('copyFailed'), true);
+    }
+  }
+
+  function humanBytes(bytes) {
+    const b = Math.max(0, Number(bytes) || 0);
+    if (b < 1024) return `${b} B`;
+    if (b < 1048576) return `${(b / 1024).toFixed(1)} KiB`;
+    if (b < 1073741824) return `${(b / 1048576).toFixed(1)} MiB`;
+    return `${(b / 1073741824).toFixed(2)} GiB`;
+  }
+
+  function humanRate(bps) {
+    const b = Math.max(0, Number(bps) || 0);
+    if (b < 1024) return `${Math.round(b)} B/s`;
+    if (b < 1048576) return `${(b / 1024).toFixed(1)} KiB/s`;
+    return `${(b / 1048576).toFixed(2)} MiB/s`;
+  }
+
+  function formatHandshake(ts) {
+    const n = parseInt(ts, 10);
+    if (!n || n <= 0) return { label: t('neverLabel'), state: 'never' };
+    const sec = Math.max(0, Math.floor(Date.now() / 1000) - n);
+    let label;
+    if (sec < 5) label = t('justNow');
+    else if (sec < 60) label = t('secondsAgo', { value: sec });
+    else if (sec < 3600) label = t('minutesAgo', { value: Math.floor(sec / 60) });
+    else if (sec < 86400) label = t('hoursAgo', { value: Math.floor(sec / 3600) });
+    else label = t('daysAgo', { value: Math.floor(sec / 86400) });
+    return { label, state: sec < 180 ? 'active' : 'idle' };
+  }
+
+  function shortKey(k) {
+    return k && k.length > 22 ? `${k.slice(0, 12)}…${k.slice(-8)}` : (k || '');
+  }
+
+  // --- Theme & Localization ---
+  const darkMediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+  function syncThemeColorMeta() {
+    const meta = document.getElementById('themeColorMeta');
+    if (!meta) return;
+    const isDark = state.prefs.theme === 'dark' || (state.prefs.theme === 'auto' && Boolean(darkMediaQuery && darkMediaQuery.matches));
+    meta.setAttribute('content', isDark ? '#0a0a0c' : '#f2f2f7');
+  }
+
+  function applyTheme(theme) {
+    const valid = ['auto', 'light', 'dark'].includes(theme) ? theme : 'auto';
+    state.prefs.theme = valid;
+    localStorage.setItem('wgksu_theme', valid);
+    document.documentElement.setAttribute('data-theme', valid);
+    syncThemeColorMeta();
+    document.querySelectorAll('#themeSeg .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.themeVal === valid));
+  }
+
+  if (darkMediaQuery && typeof darkMediaQuery.addEventListener === 'function') {
+    darkMediaQuery.addEventListener('change', syncThemeColorMeta);
+  }
+
+  function resolveLocales(pref) {
+    if (pref && pref !== 'auto') return pref === 'en' ? ['en'] : [pref, 'en'];
+    const raw = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split(/[-_]/)[0];
+    const map = { zh: 'zh-CN', ru: 'ru', en: 'en' };
+    const picked = map[raw] || 'en';
+    return picked === 'en' ? ['en'] : [picked, 'en'];
+  }
+
+  async function loadLocalization(pref = state.prefs.lang) {
+    const valid = ['auto', 'zh-CN', 'en', 'ru'].includes(pref) ? pref : 'auto';
+    state.prefs.lang = valid;
+    localStorage.setItem('wgksu_lang', valid);
+    for (const loc of resolveLocales(valid)) {
+      try {
+        const res = await fetch(`./locales/${loc}.json`, { cache: 'no-cache' });
+        if (!res.ok) continue;
+        translations = { ...FALLBACK_I18N, ...(await res.json()) };
+        document.documentElement.lang = loc;
+        break;
+      } catch {}
+    }
+    applyStaticTranslations();
+    resetCache();
+    if (state.snapshot) renderAll();
+  }
+
+  function applyStaticTranslations() {
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+      const k = el.getAttribute('data-i18n');
+      if (translations[k]) el.textContent = translations[k];
+    });
+    const filter = document.getElementById('logFilterInput');
+    if (filter) filter.placeholder = t('logFilterPlaceholder');
+    document.getElementById('refreshBtn').title = t('refresh');
+    document.getElementById('openSettingsBtn').title = t('globalSettings');
+    document.getElementById('copyConfigBtn').title = t('btnCopy');
+    document.getElementById('deleteConfigBtn').title = t('btnDelete');
+    document.getElementById('toggleSecretBtn').title = state.showSecrets ? t('btnHideSecrets') : t('btnShowSecrets');
+    document.querySelectorAll('#langSeg .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.langVal === state.prefs.lang));
+    document.querySelectorAll('#refreshSeg .seg-btn').forEach((b) => b.classList.toggle('active', Number(b.dataset.refresh) === state.prefs.refreshMs));
+    renderMountState();
+  }
+
+  function resetCache() {
+    for (const k of Object.keys(state.cache)) state.cache[k] = '';
+  }
+
+  // --- Parsers ---
+  function parseSections(raw) {
+    const out = {};
+    let cur = null;
+    for (const line of String(raw || '').split('\n')) {
+      const m = line.match(/^===WGKSU_SEC:([A-Z0-9_]+)===$/);
+      if (m) {
+        cur = m[1];
+        out[cur] = [];
+      } else if (cur) {
+        out[cur].push(line);
+      }
+    }
+    const res = {};
+    for (const [k, v] of Object.entries(out)) res[k] = v.join('\n').trim();
+    return res;
+  }
+
+  function parseKV(text) {
+    const map = {};
+    for (const line of String(text || '').split('\n')) {
+      const eq = line.indexOf('=');
+      if (eq > 0) map[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+    }
+    return map;
+  }
+
+  function parseWgShow(text) {
+    const result = { iface: {}, peers: [] };
+    let cur = null;
+    for (const line of String(text || '').split('\n')) {
+      const m = line.match(/^(\s*)(\S.+?):\s*(.*)$/);
+      if (!m) continue;
+      const [, indent, key, val] = m;
+      const k = key.toLowerCase().replace(/\s+/g, '');
+      if (!indent) {
+        if (k === 'peer') { cur = { publicKey: val.trim() }; result.peers.push(cur); }
+        else cur = null;
+      } else if (cur) cur[k] = val.trim();
+      else result.iface[k] = val.trim();
+    }
+    return result;
+  }
+
+  function parseWgDump(text) {
+    const lines = String(text || '').split('\n').filter(Boolean);
+    const head = lines[0] ? lines[0].split('\t') : [];
+    const peers = {};
+    for (const line of lines.slice(1)) {
+      const c = line.split('\t');
+      if (c.length >= 8) {
+        peers[c[0]] = {
+          endpoint: c[2], allowedIps: c[3], latestHandshake: c[4],
+          rx: parseInt(c[5], 10) || 0, tx: parseInt(c[6], 10) || 0, keepalive: c[7]
+        };
+      }
+    }
+    return { publicKey: head[1] || '', listenPort: head[2] || '', peers };
+  }
+
+  function parseAddresses(text, family) {
+    const list = [];
+    const re = family === 6 ? /inet6\s+([^\s]+)/g : /inet\s+([^\s]+)/g;
+    let m;
+    while ((m = re.exec(String(text || ''))) !== null) {
+      if (family === 6 && /^fe80:/i.test(m[1])) continue;
+      list.push(m[1]);
+    }
+    return list;
+  }
+
+  function hasPref1MainRule(text) {
+    return String(text || '').split('\n').some((l) => /^\s*1:\s+.*\blookup\s+main\b/.test(l));
+  }
+
+  function parseRouteCidrs(text) {
+    return String(text || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => l.split(/\s+/)[0]);
+  }
+
+  function analyzeConfigHealth(confText) {
+    if (!confText) return null;
+    let sec = '';
+    const addrs = [], allowed = [];
+    for (const raw of confText.replace(/\r/g, '').split('\n')) {
+      const l = raw.replace(/#.*$/, '').trim();
+      if (!l) continue;
+      if (l.startsWith('[')) { sec = l.toLowerCase(); continue; }
+      const eq = l.indexOf('=');
+      if (eq < 0) continue;
+      const k = l.slice(0, eq).trim().toLowerCase();
+      const v = l.slice(eq + 1).trim();
+      if (sec === '[interface]' && k === 'address') v.split(',').map((x) => x.trim()).filter(Boolean).forEach((x) => addrs.push(x));
+      if (sec === '[peer]' && k === 'allowedips') v.split(',').map((x) => x.trim()).filter(Boolean).forEach((x) => allowed.push(x));
+    }
+    const a4 = addrs.some((a) => !a.includes(':')), a6 = addrs.some((a) => a.includes(':'));
+    const r4 = allowed.some((a) => !a.includes(':')), r6 = allowed.some((a) => a.includes(':'));
+    const d6 = allowed.some((a) => a === '::/0' || a === '::/1' || a === '8000::/1' || a === '2000::/3');
+    if (a6 && !r6) return { level: 'warn', key: 'configHintV6NoAllowed' };
+    if (r6 && !a6) return { level: 'warn', key: 'configHintV6NoAddr' };
+    if (a4 && a6 && r4 && d6) return { level: 'ok', key: 'configHintDualStackOk' };
+    return null;
+  }
+
+  // --- Fast Lightweight Poll (~10ms: zero dumpsys / iptables / wgksu subshell) ---
+  function buildFastPollCmd(cur) {
+    const safe = safeIface(cur);
+    if (!safe) return '';
+    return [
+      `WG='${WG_CMD}'`,
+      `CUR='${safe}'`,
+      `echo '===WGKSU_SEC:RUNNING==='`, `"$WG" show interfaces 2>/dev/null`,
+      `echo '===WGKSU_SEC:LINK==='`, `ip link show "$CUR" 2>/dev/null`,
+      `echo '===WGKSU_SEC:WGDUMP==='`, `"$WG" show "$CUR" dump 2>/dev/null`
+    ].join('\n');
+  }
+
+  function computeRates(cur, isUp, wgDump) {
+    let totalRx = 0, totalTx = 0;
+    const peerEntries = Object.entries(wgDump.peers);
+    for (const [, p] of peerEntries) { totalRx += p.rx; totalTx += p.tx; }
+    const now = Date.now();
+    const prev = state.rates;
+    let rxRate = 0, txRate = 0;
+    const peerRates = {};
+    if (isUp && prev.iface === cur && prev.ts > 0 && now - prev.ts > 400 && now - prev.ts < 65000) {
+      const dt = (now - prev.ts) / 1000;
+      if (totalRx >= prev.rx) rxRate = (totalRx - prev.rx) / dt;
+      if (totalTx >= prev.tx) txRate = (totalTx - prev.tx) / dt;
+      for (const [pk, p] of peerEntries) {
+        if (prev.peers[pk]) {
+          peerRates[pk] = {
+            rx: p.rx >= prev.peers[pk].rx ? (p.rx - prev.peers[pk].rx) / dt : 0,
+            tx: p.tx >= prev.peers[pk].tx ? (p.tx - prev.peers[pk].tx) / dt : 0
+          };
+        }
+      }
+    }
+    state.rates = {
+      iface: cur, ts: now, rx: totalRx, tx: totalTx, rxRate, txRate,
+      peers: Object.fromEntries(peerEntries.map(([pk, p]) => [pk, { rx: p.rx, tx: p.tx }]))
+    };
+    return { totalRx, totalTx, rxRate, txRate, peerRates };
+  }
+
+  async function fastPollSnapshot() {
+    if (inFlight || state.busyAction || !state.snapshot || !state.snapshot.cur) return;
+    const cur = state.snapshot.cur;
+    const cmd = buildFastPollCmd(cur);
+    if (!cmd) return;
+    inFlight = true;
+    let needFull = false;
+    try {
+      const res = await run(cmd, 5000);
+      if (res.errno !== 0 && !res.stdout.includes('===WGKSU_SEC:')) return;
+      const sec = parseSections(res.stdout);
+      const running = (sec.RUNNING || '').split(/\s+/).filter(Boolean);
+      const linkText = sec.LINK || '';
+      const isUp = /\bUP\b/.test(linkText) || running.includes(cur);
+      const prevUp = state.snapshot.isUp;
+      if (isUp !== prevUp) {
+        needFull = true;
+        return;
+      }
+      const mtuMatch = linkText.match(/\bmtu\s+(\d+)/);
+      const wgDump = parseWgDump(sec.WGDUMP || '');
+      const rInfo = computeRates(cur, isUp, wgDump);
+      state.runningIfaces = running;
+      state.snapshot.wgDump = wgDump;
+      if (mtuMatch) state.snapshot.mtu = mtuMatch[1];
+      state.snapshot.totalRx = rInfo.totalRx;
+      state.snapshot.totalTx = rInfo.totalTx;
+      state.snapshot.rxRate = rInfo.rxRate;
+      state.snapshot.txRate = rInfo.txRate;
+      state.snapshot.peerRates = rInfo.peerRates;
+      renderHeader();
+      if (state.tab === 'overview') renderOverview();
+    } finally {
+      inFlight = false;
+      if (queued || needFull) {
+        queued = false;
+        refreshSnapshot(false);
+      }
+    }
+  }
+
+  // --- Single Batched Shell Snapshot ---
+  function buildSnapshotCmd(want) {
+    const safe = safeIface(want);
+    const readConf = !state.editing;
+    return [
+      `WG_DATA='${WG_DATA}'`,
+      `WG='${WG_CMD}'`,
+      `WGKSU='${WGKSU_CMD}'`,
+      `WANT='${safe}'`,
+      `echo '===WGKSU_SEC:IFACES==='`,
+      `for f in "$WG_DATA"/*.conf; do [ -f "$f" ] || continue; n="\${f##*/}"; printf '%s\\n' "\${n%.conf}"; done`,
+      `echo '===WGKSU_SEC:RUNNING==='`,
+      `"$WG" show interfaces 2>/dev/null`,
+      `CUR=""`,
+      `if [ -n "$WANT" ] && [ -f "$WG_DATA/$WANT.conf" ]; then CUR="$WANT"; else for f in "$WG_DATA"/*.conf; do [ -f "$f" ] || continue; n="\${f##*/}"; CUR="\${n%.conf}"; break; done; fi`,
+      `echo '===WGKSU_SEC:CURRENT==='`,
+      `printf '%s\\n' "$CUR"`,
+      `if [ -n "$CUR" ]; then`,
+      `  echo '===WGKSU_SEC:LINK==='`, `  ip link show "$CUR" 2>/dev/null`,
+      `  echo '===WGKSU_SEC:ADDR4==='`, `  ip -4 addr show "$CUR" 2>/dev/null`,
+      `  echo '===WGKSU_SEC:ADDR6==='`, `  ip -6 addr show "$CUR" 2>/dev/null`,
+      `  echo '===WGKSU_SEC:WGSHOW==='`, `  "$WG" show "$CUR" 2>/dev/null`,
+      `  echo '===WGKSU_SEC:WGDUMP==='`, `  "$WG" show "$CUR" dump 2>/dev/null`,
+      `  echo '===WGKSU_SEC:ROUTE4==='`, `  ip -4 route show table main dev "$CUR" 2>/dev/null`,
+      `  echo '===WGKSU_SEC:ROUTE6==='`, `  ip -6 route show table main dev "$CUR" 2>/dev/null`,
+      `  echo '===WGKSU_SEC:EP_ROUTES==='`, `  cat "$WG_DATA/endpoint-routes.$CUR" 2>/dev/null`,
+      readConf ? `  echo '===WGKSU_SEC:CONF==='; cat "$WG_DATA/$CUR.conf" 2>/dev/null` : '',
+      `  echo '===WGKSU_SEC:SETTINGS==='`,
+      `  AUTO_START=1; [ -f "$WG_DATA/autostart" ] && . "$WG_DATA/autostart" 2>/dev/null; [ -f "$WG_DATA/autostart.$CUR" ] && . "$WG_DATA/autostart.$CUR" 2>/dev/null`,
+      `  STAY_AWAKE=0; [ -f "$WG_DATA/stayawake" ] && . "$WG_DATA/stayawake" 2>/dev/null; [ -f "$WG_DATA/stayawake.$CUR" ] && . "$WG_DATA/stayawake.$CUR" 2>/dev/null`,
+      `  RERESOLVE_ENABLED=1; RERESOLVE_INTERVAL=120; [ -f "$WG_DATA/reresolve.$CUR" ] && . "$WG_DATA/reresolve.$CUR" 2>/dev/null`,
+      `  AUTOTUNNEL_ENABLED=0; WIFI_MODE=ignore; MOBILE_SIM1=ignore; MOBILE_SIM2=ignore; [ -f "$WG_DATA/autotunnel.$CUR" ] && . "$WG_DATA/autotunnel.$CUR" 2>/dev/null`,
+      `  MANUAL_PAUSED=0; [ -f "$WG_DATA/manual_pause.$CUR" ] && MANUAL_PAUSED=1`,
+      `  printf 'AUTO_START=%s\\nSTAY_AWAKE=%s\\nRERESOLVE_ENABLED=%s\\nRERESOLVE_INTERVAL=%s\\nAUTOTUNNEL_ENABLED=%s\\nWIFI_MODE=%s\\nMOBILE_SIM1=%s\\nMOBILE_SIM2=%s\\nMANUAL_PAUSED=%s\\n' "\${AUTO_START:-1}" "\${STAY_AWAKE:-0}" "\${RERESOLVE_ENABLED:-1}" "\${RERESOLVE_INTERVAL:-120}" "\${AUTOTUNNEL_ENABLED:-0}" "\${WIFI_MODE:-ignore}" "\${MOBILE_SIM1:-ignore}" "\${MOBILE_SIM2:-ignore}" "$MANUAL_PAUSED"`,
+      `  echo '===WGKSU_SEC:AUTO_SSIDS==='`,
+      `  cat "$WG_DATA/autotunnel.$CUR.ssids" 2>/dev/null`,
+      `fi`,
+      `echo '===WGKSU_SEC:NETINFO==='`,
+      `"$WGKSU" net-info 2>/dev/null`,
+      `echo '===WGKSU_SEC:DNSSTATUS==='`,
+      `"$WGKSU" dns-status 2>/dev/null`,
+      `echo '===WGKSU_SEC:RULE4==='`, `ip -4 rule show 2>/dev/null`,
+      `echo '===WGKSU_SEC:RULE6==='`, `ip -6 rule show 2>/dev/null`,
+      `echo '===WGKSU_SEC:LOG==='`, `tail -100 "$WG_DATA/error.log" 2>/dev/null`,
+      `echo '===WGKSU_SEC:RRLOG==='`, `tail -40 "$WG_DATA/reresolve.log" 2>/dev/null`
+    ].filter(Boolean).join('\n');
+  }
+
+  async function refreshSnapshot(spin = false) {
+    if (inFlight) { queued = true; return; }
+    inFlight = true;
+    const btn = document.getElementById('refreshBtn');
+    if (spin && btn) {
+      btn.classList.add('spinning');
+      await nextPaint();
+    }
+
+    try {
+      const res = await run(buildSnapshotCmd(state.currentIface), 12000);
+      const notice = document.getElementById('bridgeNotice');
+      if (res.errno === -1 && res.stderr === 'BRIDGE_UNAVAILABLE') {
+        notice.style.display = 'flex';
+        notice.textContent = t('bridgeUnavailable');
+        return;
+      }
+      if (res.errno !== 0 && !res.stdout.includes('===WGKSU_SEC:')) {
+        notice.style.display = 'flex';
+        notice.textContent = t('snapshotFailed') + (res.stderr || res.errno);
+        return;
+      }
+      notice.style.display = 'none';
+
+      const sec = parseSections(res.stdout);
+      const ifaces = (sec.IFACES || '').split('\n').map((s) => s.trim()).filter(Boolean);
+      const running = (sec.RUNNING || '').split(/\s+/).filter(Boolean);
+      const cur = sec.CURRENT || '';
+      state.ifaces = ifaces;
+      state.runningIfaces = running;
+      state.currentIface = cur;
+
+      const linkText = sec.LINK || '';
+      const isUp = Boolean(cur) && (/\bUP\b/.test(linkText) || running.includes(cur));
+      const mtuMatch = linkText.match(/\bmtu\s+(\d+)/);
+      const wgShow = parseWgShow(sec.WGSHOW || '');
+      const wgDump = parseWgDump(sec.WGDUMP || '');
+      const addr4 = parseAddresses(sec.ADDR4 || '', 4);
+      const addr6 = parseAddresses(sec.ADDR6 || '', 6);
+      const routes4 = parseRouteCidrs(sec.ROUTE4 || '');
+      const routes6 = parseRouteCidrs(sec.ROUTE6 || '');
+      const kv = parseKV(sec.SETTINGS || '');
+      const net = parseKV(sec.NETINFO || '');
+      const dnsSt = parseKV(sec.DNSSTATUS || '');
+      const autoSsids = (sec.AUTO_SSIDS || '').split('\n').map((s) => s.trim()).filter(Boolean);
+
+      const rInfo = computeRates(cur, isUp, wgDump);
+      const { totalRx, totalTx, rxRate, txRate, peerRates } = rInfo;
+      lastFullSyncAt = Date.now();
+
+      const prevConf = state.snapshot && state.snapshot.cur === cur ? state.snapshot.conf : '';
+      state.snapshot = {
+        cur, isUp,
+        mtu: mtuMatch ? mtuMatch[1] : '',
+        publicKey: wgShow.iface.publickey || wgDump.publicKey || '',
+        listenPort: wgShow.iface.listeningport || (wgDump.listenPort && wgDump.listenPort !== '0' ? wgDump.listenPort : ''),
+        addr4, addr6, wgShow, wgDump,
+        totalRx, totalTx, rxRate, txRate, peerRates,
+        routes4, routes6,
+        rawRoute4: sec.ROUTE4 || '', rawRoute6: sec.ROUTE6 || '',
+        epRoutes: sec.EP_ROUTES || '',
+        rule4Ok: hasPref1MainRule(sec.RULE4 || ''),
+        rule6Ok: hasPref1MainRule(sec.RULE6 || ''),
+        rawRule4: sec.RULE4 || '', rawRule6: sec.RULE6 || '',
+        conf: state.editing ? prevConf : (sec.CONF || ''),
+        autoStart: kv.AUTO_START !== '0',
+        stayAwake: kv.STAY_AWAKE === '1',
+        reresolveEnabled: kv.RERESOLVE_ENABLED !== '0',
+        reresolveInterval: kv.RERESOLVE_INTERVAL || '120',
+        autoEnabled: kv.AUTOTUNNEL_ENABLED === '1',
+        manualPaused: kv.MANUAL_PAUSED === '1',
+        wifiMode: ['ignore', 'exclude', 'include'].includes(kv.WIFI_MODE) ? kv.WIFI_MODE : 'ignore',
+        autoSsids,
+        mobileSim1: ['ignore', 'on', 'off'].includes(kv.MOBILE_SIM1) ? kv.MOBILE_SIM1 : 'ignore',
+        mobileSim2: ['ignore', 'on', 'off'].includes(kv.MOBILE_SIM2) ? kv.MOBILE_SIM2 : 'ignore',
+        net: {
+          transport: net.TRANSPORT || 'none',
+          wifiSsid: net.WIFI_SSID || '',
+          simSlot: net.SIM_SLOT || 'none',
+          sim1Name: net.SIM1_NAME || '',
+          sim2Name: net.SIM2_NAME || ''
+        },
+        dnsStatus: {
+          dns4: dnsSt.DNS4 || '',
+          dns6: dnsSt.DNS6 || '',
+          v4Nat: dnsSt.V4_NAT === '1',
+          v6Mode: dnsSt.V6_MODE || 'off',
+          dotGuard: dnsSt.DOT_GUARD === '1'
+        },
+        runtimeLog: stripAnsi(sec.LOG || ''),
+        dnsLog: stripAnsi(sec.RRLOG || '')
+      };
+
+      if (!state.autoDraft.dirty || state.autoDraft.iface !== cur) {
+        state.autoDraft = {
+          iface: cur, dirty: false,
+          enabled: state.snapshot.autoEnabled,
+          wifiMode: state.snapshot.wifiMode,
+          ssids: [...state.snapshot.autoSsids],
+          sim1: state.snapshot.mobileSim1,
+          sim2: state.snapshot.mobileSim2
+        };
+      }
+
+      renderAll();
+    } finally {
+      inFlight = false;
+      if (btn && !state.busyAction) btn.classList.remove('spinning');
+      if (queued) { queued = false; refreshSnapshot(false); }
+    }
+  }
+
+  function renderCaptivePortalSeg(mode) {
+    const cur = ['default', 'cn', 'ignore'].includes(mode) ? mode : 'default';
+    document.querySelectorAll('#captivePortalSeg .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.captiveVal === cur));
+  }
+
+  async function refreshMountStatus() {
+    if (state.mount.saving) return;
+    const r = await run(`printf '%s\\n%s\\n%s\\n%s\\n' "$('${WGKSU_CMD}' mount status 2>/dev/null)" "$('${WGKSU_CMD}' mount supported 2>/dev/null)" "$('${WGKSU_CMD}' notification status 2>/dev/null)" "$('${WGKSU_CMD}' captive-portal status 2>/dev/null)"`, 8000);
+    if (state.mount.saving) return;
+    const lines = r.stdout.trim().split('\n');
+    const v = (lines[0] || '').trim();
+    const s = (lines[1] || '').trim();
+    const n = (lines[2] || '').trim();
+    const cp = (lines[3] || '').trim();
+    const notifEl = document.getElementById('notifToggle');
+    if (notifEl && ['0', '1'].includes(n)) notifEl.checked = n === '1';
+    if (cp) renderCaptivePortalSeg(cp);
+    if (r.errno !== 0 || !['0', '1'].includes(v) || !['0', '1'].includes(s)) {
+      state.mount = { loaded: true, saving: false, available: false, enabled: false, error: true };
     } else {
-      result.iface[key.replace(/\s+/g,'')] = val;
+      state.mount = { loaded: true, saving: false, available: s === '1', enabled: v === '1', error: false };
+    }
+    renderMountState();
+  }
+
+  async function loadSavedWifi() {
+    if (state.savedWifiLoading) return;
+    state.savedWifiLoading = true;
+    state.cache.auto = '';
+    renderAuto();
+    await nextPaint();
+    const r = await run(`'${WGKSU_CMD}' list-wifi 2>/dev/null`, 8000);
+    state.savedWifiLoading = false;
+    state.savedWifi = r.errno === 0 ? r.stdout.split('\n').map((s) => s.trim()).filter(Boolean) : [];
+    state.cache.auto = '';
+    renderAuto();
+  }
+
+  // --- Render Helpers ---
+  function formatCurrentNetText(net) {
+    if (!net) return t('netNone');
+    if (net.transport === 'wifi') {
+      return `${t('netWifi')} · ${net.wifiSsid || t('netUnknownSsid')}`;
+    }
+    if (net.transport === 'mobile') {
+      if (net.simSlot === 'sim1') return `${t('netMobile')} · ${net.sim1Name ? `${t('sim1Label')} (${net.sim1Name})` : t('sim1Label')}`;
+      if (net.simSlot === 'sim2') return `${t('netMobile')} · ${net.sim2Name ? `${t('sim2Label')} (${net.sim2Name})` : t('sim2Label')}`;
+      return t('netMobile');
+    }
+    if (net.transport === 'other') return t('netOther');
+    return t('netNone');
+  }
+
+  function proxyTag(family, snap) {
+    const routes = family === 6 ? snap.routes6 : snap.routes4;
+    const addrs = family === 6 ? snap.addr6 : snap.addr4;
+    const ruleOk = family === 6 ? snap.rule6Ok : snap.rule4Ok;
+    const hasDef = family === 6
+      ? routes.some((r) => r === 'default' || r === '::/0' || r === '::/1' || r === '8000::/1' || r === '2000::/3')
+      : routes.some((r) => r === 'default' || r === '0.0.0.0/0' || r === '0.0.0.0/1' || r === '128.0.0.0/1');
+    if (!routes.length && !addrs.length) return { cls: 'neutral', text: t('proxyOff') };
+    if (!ruleOk) return { cls: 'red', text: t('proxyRuleMissing') };
+    if (family === 6 && hasDef && !addrs.length) return { cls: 'amber', text: t('proxyLeakGuard') };
+    if (hasDef) return { cls: 'green', text: t('proxyActive') };
+    return { cls: 'neutral', text: t('proxySplit') };
+  }
+
+  function renderActiveTab() {
+    renderHeader();
+    if (state.tab === 'overview') renderOverview();
+    else if (state.tab === 'auto') renderAuto();
+    else if (state.tab === 'config') renderConfig();
+    else if (state.tab === 'logs') renderLogs();
+  }
+
+  function renderAll() {
+    renderActiveTab();
+  }
+
+  function renderHeader() {
+    const st = document.getElementById('headerStatus');
+    const n = state.runningIfaces.length;
+    if (!state.ifaces.length) {
+      st.className = 'header-status';
+      st.innerHTML = `<span class="status-dot"></span><span>${esc(t('noConfigs'))}</span>`;
+    } else if (n > 0) {
+      st.className = 'header-status on';
+      st.innerHTML = `<span class="status-dot on"></span><span>${esc(t('runningCount', { count: n }))}</span>`;
+    } else {
+      st.className = 'header-status';
+      st.innerHTML = `<span class="status-dot"></span><span>${esc(t('stoppedStatus'))}</span>`;
+    }
+
+    const html = state.ifaces.map((name) => {
+      const active = name === state.currentIface;
+      const up = state.runningIfaces.includes(name);
+      return `<button class="iface-pill ${active ? 'active' : ''}" type="button" data-switch="${esc(name)}" role="tab" aria-selected="${active}">
+        <span class="status-dot ${up ? 'on' : ''}"></span><span>${esc(name)}</span>
+      </button>`;
+    }).join('') + `<button class="iface-pill add" type="button" data-open-new="1">+ ${esc(t('newConfigBtn'))}</button>`;
+
+    if (html !== state.cache.strip) {
+      state.cache.strip = html;
+      document.getElementById('ifaceBar').innerHTML = html;
     }
   }
-  return result;
-}
 
-function parseDump(text) {
-  const peers = {};
-  for (const line of text.split('\n').slice(1)) {
-    const cols = line.split('\t');
-    if (cols.length >= 7) {
-      peers[cols[0]] = { endpoint: cols[2], latestHandshake: cols[4], rx: cols[5], tx: cols[6] };
+  function dnsSummary(snap) {
+    const ds = snap.dnsStatus || {};
+    const targets = [ds.dns4, ds.dns6].filter(Boolean);
+    if (!targets.length) return { targets: [], text: t('notConfigured'), cls: 'neutral', tag: t('proxyOff'), copy: '' };
+    const okV4 = !ds.dns4 || ds.v4Nat;
+    const okV6 = !ds.dns6 || ds.v6Mode === 'nat' || (Boolean(ds.dns4) && ds.v6Mode === 'block');
+    const ok = okV4 && okV6 && (ds.v4Nat || ds.v6Mode === 'nat');
+    return {
+      targets,
+      text: targets.join(', '),
+      cls: ok ? 'green' : 'amber',
+      tag: ok ? t('dnsRedirectActive') : t('dnsRedirectPartial'),
+      copy: targets[0]
+    };
+  }
+
+  function renderDnsTargetsHtml(dnsInfo) {
+    if (!dnsInfo.targets.length) return `<span class="mono">${esc(dnsInfo.text)}</span>`;
+    if (dnsInfo.targets.length === 1) return `<span class="mono">${esc(dnsInfo.targets[0])}</span>`;
+    return `<span class="mono" style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.35">${dnsInfo.targets.map((ip) => `<span>${esc(ip)}</span>`).join('')}</span>`;
+  }
+
+  function autoBlockReason(snap) {
+    if (!snap || !snap.autoEnabled || !snap.net) return '';
+    const net = snap.net;
+    if (net.transport === 'wifi' && net.wifiSsid) {
+      if (snap.wifiMode === 'exclude' && snap.autoSsids.includes(net.wifiSsid)) {
+        return t('autoBlockedWifiExclude', { ssid: net.wifiSsid });
+      }
+      if (snap.wifiMode === 'include' && !snap.autoSsids.includes(net.wifiSsid)) {
+        return t('autoBlockedWifiInclude', { ssid: net.wifiSsid });
+      }
+    } else if (net.transport === 'mobile') {
+      if (net.simSlot === 'sim1' && snap.mobileSim1 === 'off') {
+        const simLabel = net.sim1Name ? `${t('sim1Label')} (${net.sim1Name})` : t('sim1Label');
+        return t('autoBlockedSim', { sim: simLabel });
+      }
+      if (net.simSlot === 'sim2' && snap.mobileSim2 === 'off') {
+        const simLabel = net.sim2Name ? `${t('sim2Label')} (${net.sim2Name})` : t('sim2Label');
+        return t('autoBlockedSim', { sim: simLabel });
+      }
     }
-  }
-  return peers;
-}
-
-async function getInterfaces() {
-  const r = await run(`ls ${WG_DATA}/*.conf 2>/dev/null`);
-  return r.stdout.trim().split('\n').filter(Boolean).map(f => {
-    const m = f.match(/([^/]+)\.conf$/);
-    return m ? m[1] : null;
-  }).filter(Boolean);
-}
-
-async function refresh() {
-  const ifaces = await getInterfaces();
-
-  if (!ifaces.length) {
-    document.getElementById('statusBadge').innerHTML = `<span class="status-dot off"></span>${t('noConfigs')}`;
-    document.getElementById('ifaceTabs').innerHTML = '';
-    document.getElementById('ifaceInfo').innerHTML = '';
-    document.getElementById('peers').innerHTML = `<div style="color:var(--dim);padding:8px">${t('noConfFiles')}</div>`;
-    document.getElementById('configView').textContent = t('noConfigsFound');
-    document.getElementById('editBtn').textContent = t('newConfigBtn');
-    document.getElementById('editBtn').disabled = false;
-    document.getElementById('editBtn').onclick = createNewConfig;
-    return;
-  }
-  document.getElementById('editBtn').textContent = t('btnEdit');
-  document.getElementById('editBtn').onclick = toggleEdit;
-
-  if (!currentIface || !ifaces.includes(currentIface)) currentIface = ifaces[0];
-
-  document.getElementById('ifaceTabs').innerHTML = ifaces.map(i =>
-    `<span class="iface-tab ${i===currentIface?'active':''}" onclick="switchIface('${i}')">${i}</span>`
-  ).join('') + `<span class="iface-tab" onclick="addNewIface()" title="${t('newConfigBtn')}">＋</span>`;
-
-  const linkCheck = await run(`ip link show ${currentIface} 2>/dev/null`);
-  const isUp = linkCheck.errno === 0 && linkCheck.stdout.includes('UP');
-
-  const anyUp = await run(`${wgCmd} show interfaces 2>/dev/null`);
-  const runningIfaces = anyUp.stdout.trim();
-  if (runningIfaces) {
-    document.getElementById('statusBadge').innerHTML = `<span class="status-dot on"></span>${t('runningStatus')} (${runningIfaces.replace(/\n/g,', ')})`;
-  } else {
-    document.getElementById('statusBadge').innerHTML = `<span class="status-dot off"></span>${t('stoppedStatus')}`;
+    return '';
   }
 
-  if (isUp) {
-    const wgOut = await run(`${wgCmd} show ${currentIface} 2>/dev/null`);
-    const parsed = parseWgShow(wgOut.stdout);
-    const dumpOut = await run(`${wgCmd} show ${currentIface} dump 2>/dev/null`);
-    const dumpPeers = parseDump(dumpOut.stdout);
-    const ipOut = await run(`ip -4 addr show ${currentIface} 2>/dev/null`);
-    const ipMatch = ipOut.stdout.match(/inet ([^\s]+)/);
+  function patchOverviewLive(snap, peers) {
+    const rxEl = document.getElementById('liveRx');
+    if (rxEl) rxEl.textContent = humanBytes(snap.totalRx);
+    const txEl = document.getElementById('liveTx');
+    if (txEl) txEl.textContent = humanBytes(snap.totalTx);
+    const rxRateEl = document.getElementById('liveRxRate');
+    if (rxRateEl) rxRateEl.textContent = humanRate(snap.rxRate);
+    const txRateEl = document.getElementById('liveTxRate');
+    if (txRateEl) txRateEl.textContent = humanRate(snap.txRate);
 
-    document.getElementById('ifaceInfo').innerHTML = `<table class="info-table">
-      <tr><td>${t('interfaceLabel')}</td><td>${currentIface}</td></tr>
-      ${ipMatch ? `<tr><td>${t('addressLabel')}</td><td>${ipMatch[1]}</td></tr>` : ''}
-      ${parsed.iface.listeningport ? `<tr><td>${t('listenPortLabel')}</td><td>${parsed.iface.listeningport}</td></tr>` : ''}
-      ${parsed.iface.publickey ? `<tr><td>${t('publicKey')}</td><td style="font-family:monospace;font-size:11px">${parsed.iface.publickey}</td></tr>` : ''}
-    </table>`;
+    let activePeers = 0;
+    for (let i = 0; i < peers.length; i++) {
+      const p = peers[i];
+      const d = snap.wgDump.peers[p.publicKey] || {};
+      const hs = formatHandshake(d.latestHandshake);
+      if (hs.state === 'active') activePeers++;
+      const hsCls = hs.state === 'active' ? 'green' : (hs.state === 'idle' ? 'amber' : 'neutral');
+      const dotCls = hs.state === 'active' ? 'on' : (hs.state === 'idle' ? 'amber' : '');
+      const hsEl = document.getElementById(`peerHs_${i}`);
+      if (hsEl) {
+        hsEl.className = `tag ${hsCls}`;
+        hsEl.textContent = hs.label;
+      }
+      const dotEl = document.getElementById(`peerDot_${i}`);
+      if (dotEl) dotEl.className = `status-dot ${dotCls}`;
+      const xfEl = document.getElementById(`peerXfer_${i}`);
+      if (xfEl) xfEl.textContent = `↓ ${humanBytes(d.rx || 0)} · ↑ ${humanBytes(d.tx || 0)}`;
+    }
+    const metaEl = document.getElementById('livePeersMeta');
+    if (metaEl) metaEl.textContent = peers.length ? t('peersActiveSummary', { active: activePeers, total: peers.length }) : '';
+  }
 
-    if (parsed.peers.length) {
-      document.getElementById('peers').innerHTML = parsed.peers.map(p => {
-        const dump = dumpPeers[p.publicKey] || {};
-        const handshake = dump.latestHandshake || '0';
-        const sec = Math.floor(Date.now()/1000) - parseInt(handshake);
-        const active = handshake !== '0' && sec < 180;
-        const rx = dump.rx ? humanBytes(parseInt(dump.rx)) : '';
-        const tx = dump.tx ? humanBytes(parseInt(dump.tx)) : '';
-        const endpoint = dump.endpoint || p.endpoint || '';
-        return `<div class="peer-card">
-          <div class="peer-header">
-            <span class="peer-name">${p.publicKey.substring(0,20)}...</span>
-            <span class="peer-badge ${active?'active':'inactive'}">${active?t('activeBadge'):t('idleBadge')}</span>
+  function renderOverview() {
+    const el = document.getElementById('overviewBody');
+    const snap = state.snapshot;
+    if (!snap || !snap.cur) {
+      const empty = `<div class="sheet"><div class="empty">
+        <div class="empty-title">${esc(t('noConfigs'))}</div>
+        <div class="empty-desc">${esc(t('noConfigsFound'))}</div>
+        <div class="btn-grid-1" style="max-width:220px;margin:0 auto">
+          <button class="btn btn-primary" type="button" data-open-new="1">${esc(t('newConfigFullBtn'))}</button>
+        </div>
+      </div></div>`;
+      if (empty !== state.cache.overview) {
+        state.cache.overview = empty;
+        state.cache.overviewStruct = '';
+        el.innerHTML = empty;
+      }
+      return;
+    }
+
+    const busy = state.busyAction;
+    const metaParts = [];
+    if (snap.isUp && snap.listenPort) metaParts.push(`${t('listenPortLabel')} :${snap.listenPort}`);
+    if (snap.isUp && snap.mtu) metaParts.push(`${t('mtuLabel')} ${snap.mtu}`);
+    if (!metaParts.length) metaParts.push(formatCurrentNetText(snap.net));
+
+    const blockReason = !snap.isUp ? autoBlockReason(snap) : '';
+    const manualPaused = !snap.isUp && snap.autoEnabled && snap.manualPaused;
+    const peers = snap.isUp
+      ? (snap.wgShow.peers.length ? snap.wgShow.peers : Object.keys(snap.wgDump.peers).map((pk) => ({ publicKey: pk })))
+      : [];
+
+    // Fast path: if only live counters (bytes/rates/handshake) changed, patch text in place with zero innerHTML teardown
+    const structSig = JSON.stringify({
+      cur: snap.cur,
+      isUp: snap.isUp,
+      busy,
+      meta: metaParts.join(' · '),
+      blockReason,
+      manualPaused,
+      a4: snap.addr4,
+      a6: snap.addr6,
+      r4: snap.routes4,
+      r6: snap.routes6,
+      rule4Ok: snap.rule4Ok,
+      rule6Ok: snap.rule6Ok,
+      dns: snap.dnsStatus,
+      pk: snap.publicKey,
+      lang: state.prefs.lang,
+      peers: peers.map((p) => {
+        const d = snap.wgDump.peers[p.publicKey] || {};
+        return [p.publicKey, d.endpoint || p.endpoint || '', d.allowedIps || p.allowedips || '', d.keepalive || ''];
+      })
+    });
+    if (structSig === state.cache.overviewStruct && el.firstElementChild) {
+      if (snap.isUp) patchOverviewLive(snap, peers);
+      return;
+    }
+
+    const actionsHtml = snap.isUp
+      ? `<div class="btn-grid-2">
+          <button class="btn btn-secondary" type="button" data-ctrl="restart" ${busy ? 'disabled' : ''}>
+            ${busy === 'restart' ? '<span class="spinner"></span>' : ''}
+            <span>${esc(busy === 'restart' ? t('btnRestarting') : t('btnRestart'))}</span>
+          </button>
+          <button class="btn btn-danger" type="button" data-ctrl="stop" ${busy ? 'disabled' : ''}>
+            ${busy === 'stop' ? '<span class="spinner"></span>' : ''}
+            <span>${esc(busy === 'stop' ? t('btnStopping') : t('btnStop'))}</span>
+          </button>
+        </div>`
+      : `${manualPaused ? `<div class="notice warn" style="margin-bottom:10px">${esc(t('manualPausedNotice'))}</div>` : (blockReason ? `<div class="notice warn" style="margin-bottom:10px">${esc(blockReason)}</div>` : '')}
+        ${manualPaused
+          ? (blockReason
+              ? `<div class="btn-grid-1">
+                  <button class="btn btn-primary" type="button" data-resume-auto="1" ${busy ? 'disabled' : ''}>${esc(t('btnResumeAuto'))}</button>
+                </div>`
+              : `<div class="btn-grid-2">
+                  <button class="btn btn-primary" type="button" data-ctrl="start" ${busy ? 'disabled' : ''}>
+                    ${busy === 'start' ? '<span class="spinner"></span>' : ''}
+                    <span>${esc(busy === 'start' ? t('btnStarting') : t('btnStart'))}</span>
+                  </button>
+                  <button class="btn btn-secondary" type="button" data-resume-auto="1" ${busy ? 'disabled' : ''}>${esc(t('btnResumeAutoShort'))}</button>
+                </div>`)
+          : `<div class="btn-grid-1">
+              <button class="btn ${blockReason ? 'btn-secondary' : 'btn-primary'}" type="button" data-ctrl="start" ${busy ? 'disabled' : ''}>
+                ${busy === 'start' ? '<span class="spinner"></span>' : ''}
+                <span>${esc(busy === 'start' ? t('btnStarting') : t('btnStart'))}</span>
+              </button>
+            </div>`}`;
+
+    const statusTagCls = busy ? 'amber' : (snap.isUp ? 'green' : 'neutral');
+    const statusDotCls = busy ? 'amber' : (snap.isUp ? 'on' : '');
+    const statusTagTxt = busy === 'start'
+      ? t('btnStarting')
+      : (busy === 'stop' ? t('btnStopping') : (busy === 'restart' ? t('btnRestarting') : (snap.isUp ? t('runningStatus') : t('stoppedStatus'))));
+
+    let body = `<div class="sheet">
+      <div class="hero-head">
+        <div style="min-width:0">
+          <div class="hero-name">${esc(snap.cur)}</div>
+          <div class="hero-meta">${esc(metaParts.join(' · '))}</div>
+        </div>
+        <span id="heroStatusTag" class="tag ${statusTagCls}">
+          <span class="status-dot ${statusDotCls}"></span>
+          <span>${esc(statusTagTxt)}</span>
+        </span>
+      </div>
+      ${snap.isUp ? `
+        <div class="traffic-bar">
+          <div class="traffic-col">
+            <div class="traffic-label">↓ ${esc(t('rxLabel'))}</div>
+            <div id="liveRx" class="traffic-num">${esc(humanBytes(snap.totalRx))}</div>
+            <div id="liveRxRate" class="traffic-rate">${esc(humanRate(snap.rxRate))}</div>
           </div>
-          <div class="peer-detail">
-            ${endpoint && endpoint !== '(none)' ? `<span><span class="dim">${t('endpointLabel')}</span> ${endpoint}</span>` : ''}
-            <span><span class="dim">${t('handshakeLabel')}</span> ${timeAgo(handshake)}</span>
-            ${p.allowedips ? `<span><span class="dim">${t('allowedIpsLabel')}</span> ${p.allowedips}</span>` : ''}
-            ${rx ? `<span><span class="dim">${t('transferLabel')}</span> ↓${rx} ↑${tx}</span>` : ''}
+          <div class="traffic-div"></div>
+          <div class="traffic-col">
+            <div class="traffic-label">↑ ${esc(t('txLabel'))}</div>
+            <div id="liveTx" class="traffic-num">${esc(humanBytes(snap.totalTx))}</div>
+            <div id="liveTxRate" class="traffic-rate">${esc(humanRate(snap.txRate))}</div>
           </div>
+        </div>` : ''}
+      <div class="hero-actions">${actionsHtml}</div>
+    </div>`;
+
+    if (snap.isUp) {
+      const v4 = proxyTag(4, snap);
+      const v6 = proxyTag(6, snap);
+      const dnsInfo = dnsSummary(snap);
+      const v4Text = snap.addr4.length ? snap.addr4.join(', ') : t('notConfigured');
+      const v6Text = snap.addr6.length ? snap.addr6.join(', ') : t('notConfigured');
+      body += `
+        <div class="sec-head"><span class="sec-title">${esc(t('networkSection'))}</span></div>
+        <div class="sheet">
+          <div class="cell ${snap.addr4.length ? 'clickable' : ''}" ${snap.addr4.length ? `data-copy="${esc(snap.addr4[0])}"` : ''}>
+            <span class="cell-label muted">${esc(t('ipv4Label'))}</span>
+            <span class="cell-val">
+              <span class="mono">${esc(v4Text)}</span>
+              <span class="tag ${v4.cls}">${esc(v4.text)}</span>
+            </span>
+          </div>
+          <div class="cell ${snap.addr6.length ? 'clickable' : ''}" ${snap.addr6.length ? `data-copy="${esc(snap.addr6[0])}"` : ''}>
+            <span class="cell-label muted">${esc(t('ipv6Label'))}</span>
+            <span class="cell-val">
+              <span class="mono">${esc(v6Text)}</span>
+              <span class="tag ${v6.cls}">${esc(v6.text)}</span>
+            </span>
+          </div>
+          <div class="cell ${dnsInfo.copy ? 'clickable' : ''}" ${dnsInfo.copy ? `data-copy="${esc(dnsInfo.copy)}"` : ''}>
+            <span class="cell-label muted">${esc(t('tunnelDnsLabel'))}</span>
+            <span class="cell-val">
+              ${renderDnsTargetsHtml(dnsInfo)}
+              <span class="tag ${dnsInfo.cls}">${esc(dnsInfo.tag)}</span>
+            </span>
+          </div>
+          ${snap.publicKey ? `
+            <div class="cell clickable" data-copy="${esc(snap.publicKey)}">
+              <span class="cell-label muted">${esc(t('publicKey'))}</span>
+              <span class="cell-val mono">${esc(shortKey(snap.publicKey))}</span>
+            </div>` : ''}
+        </div>`;
+
+      let activePeers = 0;
+      const peerSheets = peers.map((p, idx) => {
+        const d = snap.wgDump.peers[p.publicKey] || {};
+        const hs = formatHandshake(d.latestHandshake);
+        if (hs.state === 'active') activePeers++;
+        const ep = (d.endpoint && d.endpoint !== '(none)') ? d.endpoint : (p.endpoint || '');
+        const rawIps = (d.allowedIps && d.allowedIps !== '(none)') ? d.allowedIps : (p.allowedips || '');
+        const cidrs = rawIps.split(/[\s,]+/).filter((c) => c && c !== '(none)');
+        const ka = d.keepalive && d.keepalive !== 'off' ? d.keepalive : '';
+        const hsCls = hs.state === 'active' ? 'green' : (hs.state === 'idle' ? 'amber' : 'neutral');
+
+        return `<div class="sheet">
+          <div class="cell clickable" data-copy="${esc(p.publicKey)}">
+            <span class="cell-label mono" style="display:inline-flex;align-items:center;gap:7px">
+              <span id="peerDot_${idx}" class="status-dot ${hs.state === 'active' ? 'on' : (hs.state === 'idle' ? 'amber' : '')}"></span>
+              ${esc(shortKey(p.publicKey))}
+            </span>
+            <span id="peerHs_${idx}" class="tag ${hsCls}">${esc(hs.label)}</span>
+          </div>
+          ${ep ? `<div class="cell clickable" data-copy="${esc(ep)}">
+            <span class="cell-label muted">${esc(t('endpointLabel'))}</span>
+            <span class="cell-val mono">${esc(ep)}</span>
+          </div>` : ''}
+          <div class="cell">
+            <span class="cell-label muted">${esc(t('transferLabel'))}</span>
+            <span id="peerXfer_${idx}" class="cell-val mono">↓ ${esc(humanBytes(d.rx || 0))} · ↑ ${esc(humanBytes(d.tx || 0))}</span>
+          </div>
+          ${ka ? `<div class="cell">
+            <span class="cell-label muted">${esc(t('keepaliveLabel'))}</span>
+            <span class="cell-val mono">${esc(t('keepaliveValue', { value: ka }))}</span>
+          </div>` : ''}
+          ${cidrs.length ? `<div class="cell">
+            <span class="cell-label muted">${esc(t('allowedIpsLabel'))}</span>
+            <div class="cidr-row">${cidrs.map((c) => `<span class="cidr-pill ${c.includes(':') ? 'v6' : ''}">${esc(c)}</span>`).join('')}</div>
+          </div>` : ''}
         </div>`;
       }).join('');
+
+      body += `<div class="sec-head">
+        <span class="sec-title">${esc(t('peersTitle'))}</span>
+        <span id="livePeersMeta" class="sec-meta">${peers.length ? esc(t('peersActiveSummary', { active: activePeers, total: peers.length })) : ''}</span>
+      </div>`;
+      body += peers.length
+        ? peerSheets
+        : `<div class="sheet"><div class="empty" style="padding:24px"><div class="empty-desc" style="margin:0">${esc(t('noPeersConfigured'))}</div></div></div>`;
     } else {
-      document.getElementById('peers').innerHTML = `<div style="color:var(--dim);padding:8px">${t('noPeersConfigured')}</div>`;
+      body += `<div class="sheet" style="margin-top:12px"><div class="empty" style="padding:26px 20px">
+        <div class="empty-desc" style="margin:0">${esc(t('interfaceNotRunning'))}</div>
+      </div></div>`;
     }
-  } else {
-    document.getElementById('ifaceInfo').innerHTML = `<table class="info-table"><tr><td>${currentIface}</td><td style="color:var(--red)">${t('downLabel')}</td></tr></table>`;
-    document.getElementById('peers').innerHTML = `<div style="color:var(--dim);padding:8px">${t('interfaceNotRunning')}</div>`;
+
+    state.cache.overview = body;
+    state.cache.overviewStruct = structSig;
+    el.innerHTML = body;
   }
 
-  if (!window._editing) {
-    const cfg = await run(`cat ${WG_DATA}/${currentIface}.conf 2>/dev/null`);
-    document.getElementById('configView').textContent = cfg.stdout || t('configNotFound');
+  function renderAuto() {
+    const el = document.getElementById('autoBody');
+    const snap = state.snapshot;
+    if (!snap || !snap.cur) {
+      const empty = `<div class="sheet"><div class="empty"><div class="empty-desc" style="margin:0">${esc(t('noConfigsFound'))}</div></div></div>`;
+      if (empty !== state.cache.auto) { state.cache.auto = empty; el.innerHTML = empty; }
+      return;
+    }
+
+    const d = state.autoDraft;
+    const net = snap.net;
+    const wifiHintKey = d.wifiMode === 'exclude' ? 'wifiHintExclude' : (d.wifiMode === 'include' ? 'wifiHintInclude' : 'wifiHintIgnore');
+    const curSsid = net.transport === 'wifi' ? net.wifiSsid : '';
+    const canQuickAddCur = Boolean(curSsid) && !d.ssids.includes(curSsid);
+    const sim1Title = net.sim1Name ? `${t('sim1Label')} · ${net.sim1Name}` : t('sim1Label');
+    const sim2Title = net.sim2Name ? `${t('sim2Label')} · ${net.sim2Name}` : t('sim2Label');
+
+    const sig = JSON.stringify({
+      cur: snap.cur, net, d,
+      as: snap.autoStart, sa: snap.stayAwake,
+      rr: snap.reresolveEnabled, rri: snap.reresolveInterval,
+      sw: state.savedWifi, swl: state.savedWifiLoading,
+      lang: state.prefs.lang
+    });
+    if (sig === state.cache.auto) return;
+    state.cache.auto = sig;
+
+    let savedBlock = '';
+    if (d.wifiMode === 'exclude' || d.wifiMode === 'include') {
+      const savedPicks = Array.isArray(state.savedWifi)
+        ? (state.savedWifi.length
+            ? `<div class="chip-list" style="margin-top:8px">${state.savedWifi.slice(0, 20).map((s) => {
+                const added = d.ssids.includes(s);
+                return `<button class="pick-chip ${added ? 'added' : ''}" type="button" data-pick-ssid="${esc(s)}" ${added ? 'disabled' : ''}>${added ? '✓' : '+'} ${esc(s)}</button>`;
+              }).join('')}</div>`
+            : `<div class="cell-sub" style="margin-top:6px">${esc(t('wifiNoSaved'))}</div>`)
+        : '';
+
+      savedBlock = `
+        <div class="cell stack">
+          ${d.ssids.length
+            ? `<div class="chip-list">${d.ssids.map((s) => `<span class="ssid-chip"><span>${esc(s)}</span><button type="button" data-del-ssid="${esc(s)}" aria-label="Remove">×</button></span>`).join('')}</div>`
+            : `<div class="cell-sub">${esc(t('wifiEmptyList'))}</div>`}
+          <div class="input-row">
+            <input id="ssidInput" class="input" type="text" placeholder="${esc(t('wifiSsidPlaceholder'))}" autocomplete="off" spellcheck="false">
+            <button id="addSsidBtn" class="btn btn-secondary btn-sm" type="button" style="height:40px;padding:0 16px">${esc(t('btnAdd'))}</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${canQuickAddCur ? `<button class="pick-chip" type="button" data-pick-ssid="${esc(curSsid)}">${esc(t('wifiAddCurrent', { ssid: curSsid }))}</button>` : ''}
+            <button id="loadSavedWifiBtn" class="pick-chip" type="button" ${state.savedWifiLoading ? 'disabled' : ''}>${esc(state.savedWifiLoading ? t('loading') : t('wifiLoadSaved'))}</button>
+          </div>
+          ${savedPicks}
+        </div>`;
+    }
+
+    el.innerHTML = `
+      <div class="sec-head" style="margin-top:2px">
+        <span class="sec-title">${esc(t('autoTitle'))}</span>
+        <span class="sec-meta">${esc(snap.cur)}</span>
+      </div>
+      <div class="sheet">
+        <div class="cell">
+          <span class="cell-label muted">${esc(t('currentNetLabel'))}</span>
+          <span class="cell-val">${esc(formatCurrentNetText(net))}</span>
+        </div>
+        <div class="cell">
+          <div class="cell-left">
+            <div class="cell-label">${esc(t('autoEnableTitle'))}</div>
+            <div class="cell-sub">${esc(t('autoEnableDesc'))}</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autoEnableToggle" ${d.enabled ? 'checked' : ''}>
+            <span class="switch-track"></span>
+            <span class="switch-thumb"></span>
+          </label>
+        </div>
+      </div>
+
+      <div style="${d.enabled ? '' : 'opacity:0.5;pointer-events:none'}">
+        <div class="sec-head"><span class="sec-title">${esc(t('wifiRuleSection'))}</span></div>
+        <div class="sheet">
+          <div class="cell stack">
+            <div class="seg cols-3">
+              <button class="seg-btn ${d.wifiMode === 'ignore' ? 'active' : ''}" type="button" data-wifi-mode="ignore">${esc(t('wifiModeIgnore'))}</button>
+              <button class="seg-btn ${d.wifiMode === 'exclude' ? 'active' : ''}" type="button" data-wifi-mode="exclude">${esc(t('wifiModeExclude'))}</button>
+              <button class="seg-btn ${d.wifiMode === 'include' ? 'active' : ''}" type="button" data-wifi-mode="include">${esc(t('wifiModeInclude'))}</button>
+            </div>
+            <div class="cell-sub">${esc(t(wifiHintKey))}</div>
+          </div>
+          ${savedBlock}
+        </div>
+
+        <div class="sec-head"><span class="sec-title">${esc(t('simRuleSection'))}</span></div>
+        <div class="sheet">
+          <div class="cell stack">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span class="cell-label">${esc(sim1Title)}</span>
+              ${net.transport === 'mobile' && net.simSlot === 'sim1' ? `<span class="tag green">${esc(t('activeBadge'))}</span>` : ''}
+            </div>
+            <div class="seg cols-3">
+              <button class="seg-btn ${d.sim1 === 'ignore' ? 'active' : ''}" type="button" data-sim="1" data-act="ignore">${esc(t('simActionIgnore'))}</button>
+              <button class="seg-btn ${d.sim1 === 'on' ? 'active' : ''}" type="button" data-sim="1" data-act="on">${esc(t('simActionOn'))}</button>
+              <button class="seg-btn ${d.sim1 === 'off' ? 'active' : ''}" type="button" data-sim="1" data-act="off">${esc(t('simActionOff'))}</button>
+            </div>
+          </div>
+          <div class="cell stack">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span class="cell-label">${esc(sim2Title)}</span>
+              ${net.transport === 'mobile' && net.simSlot === 'sim2' ? `<span class="tag green">${esc(t('activeBadge'))}</span>` : ''}
+            </div>
+            <div class="seg cols-3">
+              <button class="seg-btn ${d.sim2 === 'ignore' ? 'active' : ''}" type="button" data-sim="2" data-act="ignore">${esc(t('simActionIgnore'))}</button>
+              <button class="seg-btn ${d.sim2 === 'on' ? 'active' : ''}" type="button" data-sim="2" data-act="on">${esc(t('simActionOn'))}</button>
+              <button class="seg-btn ${d.sim2 === 'off' ? 'active' : ''}" type="button" data-sim="2" data-act="off">${esc(t('simActionOff'))}</button>
+            </div>
+          </div>
+          <div class="cell"><div class="cell-sub">${esc(t('simHint'))}</div></div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="btn-grid-1">
+          <button id="saveAutoBtn" class="btn btn-primary" type="button">${esc(t('btnSaveAuto'))}</button>
+        </div>
+      </div>
+
+      <div class="sec-head"><span class="sec-title">${esc(t('ifaceAutoSection'))}</span></div>
+      <div class="sheet">
+        <div class="cell">
+          <div class="cell-left">
+            <div class="cell-label">${esc(t('bootAutoStart'))}</div>
+            <div class="cell-sub">${esc(t('bootAutoStartHint'))}</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autoStartToggle" ${snap.autoStart ? 'checked' : ''}>
+            <span class="switch-track"></span>
+            <span class="switch-thumb"></span>
+          </label>
+        </div>
+        <div class="cell">
+          <div class="cell-left">
+            <div class="cell-label">${esc(t('stayAwake'))}</div>
+            <div class="cell-sub">${esc(t('stayAwakeHint'))}</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="stayAwakeToggle" ${snap.stayAwake ? 'checked' : ''}>
+            <span class="switch-track"></span>
+            <span class="switch-thumb"></span>
+          </label>
+        </div>
+        <div class="cell stack">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+            <div class="cell-left">
+              <div class="cell-label">${esc(t('autoReresolve'))}</div>
+              <div class="cell-sub">${esc(t('autoReresolveHint'))}</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="reresolveToggle" ${snap.reresolveEnabled ? 'checked' : ''}>
+              <span class="switch-track"></span>
+              <span class="switch-thumb"></span>
+            </label>
+          </div>
+          <div class="seg cols-4">
+            ${['30', '60', '120', '300'].map((secVal) => `<button class="seg-btn ${String(snap.reresolveInterval) === secVal ? 'active' : ''}" type="button" data-rr-sec="${secVal}">${secVal}s</button>`).join('')}
+          </div>
+          <div class="btn-grid-1">
+            <button id="runReresolveBtn" class="btn btn-secondary btn-sm" type="button">${esc(t('btnRunNow'))}</button>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
-  const as = await run(`sh -c 'AUTO_START=1; [ -f ${WG_DATA}/autostart.${currentIface} ] && . ${WG_DATA}/autostart.${currentIface}; echo \${AUTO_START:-1}'`);
-  const enabled = as.stdout.trim() !== '0';
-  document.getElementById('autoStartToggle').checked = enabled;
-  document.getElementById('autoStartStatus').textContent = enabled ? t('enabledStatus') : t('disabledStatus');
-
-  const sa = await run(`sh -c 'STAY_AWAKE=0; [ -f ${WG_DATA}/stayawake.${currentIface} ] && . ${WG_DATA}/stayawake.${currentIface}; echo \${STAY_AWAKE:-0}'`);
-  const stayAwake = sa.stdout.trim() === '1';
-  document.getElementById('stayAwakeToggle').checked = stayAwake;
-  document.getElementById('stayAwakeStatus').textContent = stayAwake ? t('enabledStatus') : t('disabledStatus');
-
-  const log = await run(`tail -50 ${WG_DATA}/error.log 2>/dev/null`);
-  document.getElementById('log').textContent = stripAnsi(log.stdout) || t('noLogEntries');
-}
-
-window.switchIface = function(name) {
-  currentIface = name;
-  if (window._editing) cancelEdit();
-  refresh();
-};
-
-window.control = async function(action) {
-  const btn = event.target;
-  btn.disabled = true; btn.textContent = '...';
-  const timeout = new Promise(r => setTimeout(() => r({ errno: -1, stdout: '', stderr: 'timeout' }), 15000));
-  const result = await Promise.race([run(`${wgksuCmd} ${action} ${currentIface}`), timeout]);
-  if (result.stderr === 'timeout') toast(t('commandTimedOut'), true);
-  await new Promise(r => setTimeout(r, 500));
-  await refresh();
-  btn.disabled = false;
-  
-  const actionKey = 'btn' + action.charAt(0).toUpperCase() + action.slice(1);
-  btn.textContent = t(actionKey) || action;
-};
-
-window.toggleEdit = async function() {
-  if (!window._editing) {
-    const cfg = await run(`cat ${WG_DATA}/${currentIface}.conf 2>/dev/null`);
-    document.getElementById('configEdit').value = cfg.stdout;
-    document.getElementById('configView').style.display = 'none';
-    document.getElementById('configEdit').style.display = 'block';
-    document.getElementById('configBtns').style.display = 'flex';
-    document.getElementById('editBtn').textContent = t('btnEditing');
-    document.getElementById('editBtn').disabled = true;
-    window._editing = true;
+  function highlightConfig(text) {
+    if (!text) return `<span style="color:var(--ink-3)">${esc(t('configNotFound'))}</span>`;
+    return text.replace(/\r/g, '').split('\n').map((line) => {
+      const tr = line.trim();
+      if (!tr) return '<span class="cfg-line"> </span>';
+      if (tr.startsWith('#')) return `<span class="cfg-line cfg-comment">${esc(line)}</span>`;
+      if (/^\[.+\]$/.test(tr)) return `<span class="cfg-line cfg-sec">${esc(line)}</span>`;
+      const eq = line.indexOf('=');
+      if (eq > 0) {
+        const k = line.slice(0, eq), v = line.slice(eq + 1);
+        if (/^\s*(PrivateKey|PresharedKey)\s*$/i.test(k) && !state.showSecrets) {
+          return `<span class="cfg-line"><span class="cfg-key">${esc(k)}</span>=<span class="cfg-secret"> ••••••••••••••</span></span>`;
+        }
+        return `<span class="cfg-line"><span class="cfg-key">${esc(k)}</span>=${esc(v)}</span>`;
+      }
+      return `<span class="cfg-line">${esc(line)}</span>`;
+    }).join('');
   }
-};
 
-window.cancelEdit = function() {
-  document.getElementById('configView').style.display = 'block';
-  document.getElementById('configEdit').style.display = 'none';
-  document.getElementById('configBtns').style.display = 'none';
-  document.getElementById('editBtn').textContent = t('btnEdit');
-  document.getElementById('editBtn').disabled = false;
-  window._editing = false;
-};
+  function renderConfig() {
+    const snap = state.snapshot;
+    const has = Boolean(snap && snap.cur);
+    document.getElementById('configFileTitle').textContent = has ? `${snap.cur}.conf` : t('configTitle');
+    document.getElementById('editConfigBtn').disabled = !has;
+    document.getElementById('copyConfigBtn').disabled = !has;
+    document.getElementById('deleteConfigBtn').disabled = !has;
+    document.getElementById('toggleSecretBtn').style.display = has && !state.editing ? '' : 'none';
+    const insertBtn = document.getElementById('insertPrivKeyBtn');
+    const showInsert = Boolean(state.editing && state.lastGenKeys);
+    insertBtn.style.display = showInsert ? '' : 'none';
+    document.getElementById('keyActionGrid').className = showInsert ? 'btn-grid-2' : 'btn-grid-1';
 
-window.saveConfig = async function() {
-  const content = document.getElementById('configEdit').value;
-  if (!/\[Interface\]/i.test(content)) { toast(t('missingInterface'), true); return; }
-  if (!/PrivateKey\s*=/i.test(content)) { toast(t('missingPrivateKey'), true); return; }
-  if (!/\[Peer\]/i.test(content)) { toast(t('missingPeer'), true); return; }
-  if (/REPLACE_WITH_/.test(content)) { toast(t('replacePlaceholder'), true); return; }
-  const r = await run(`cat > ${WG_DATA}/${currentIface}.conf << 'WGCONF'\n${content}\nWGCONF`);
-  if (r.errno === 0) {
-    toast(t('configSaved'));
-    cancelEdit();
-    await refresh();
-  } else {
-    toast(t('saveFailed') + r.stderr, true);
+    const hintEl = document.getElementById('configHint');
+    const h = has ? analyzeConfigHealth(state.editing ? document.getElementById('configEditor').value : snap.conf) : null;
+    if (h) {
+      hintEl.className = `notice ${h.level}`;
+      hintEl.style.display = 'flex';
+      hintEl.textContent = t(h.key);
+    } else {
+      hintEl.style.display = 'none';
+    }
+
+    if (!state.editing) {
+      const sig = `${snap ? snap.cur : ''}|${state.showSecrets}|${snap ? snap.conf : ''}`;
+      if (sig !== state.cache.config) {
+        state.cache.config = sig;
+        document.getElementById('configView').innerHTML = has
+          ? highlightConfig(snap.conf)
+          : `<span style="color:var(--ink-3)">${esc(t('noConfigsFound'))}</span>`;
+      }
+    }
   }
-};
 
-window.saveAndRestart = async function() {
-  await saveConfig();
-  await run(`${wgksuCmd} restart`);
-  await new Promise(r => setTimeout(r, 1000));
-  await refresh();
-  toast(t('configSavedRestarted'));
-};
-
-window.saveAutoStart = async function(enabled) {
-  const toggle = document.getElementById('autoStartToggle');
-  const status = document.getElementById('autoStartStatus');
-  toggle.disabled = true; status.textContent = t('savingStatus');
-  const r = await run(`cat > ${WG_DATA}/autostart.${currentIface} << 'WGAUTO'\nAUTO_START=${enabled?'1':'0'}\nWGAUTO`);
-  toggle.disabled = false;
-  if (r.errno === 0) {
-    toggle.checked = enabled;
-    status.textContent = enabled ? t('enabledStatus') : t('disabledStatus');
-    toast(enabled ? t('bootAutoStartEnabled') : t('bootAutoStartDisabled'));
-  } else {
-    toggle.checked = !enabled;
-    status.textContent = (!enabled) ? t('enabledStatus') : t('disabledStatus');
-    toast(t('saveFailed') + r.stderr, true);
+  function formatLogs(text, filter) {
+    const lines = String(text || '').split('\n').filter((l) => l.trim());
+    if (!lines.length) return `<div style="color:var(--ink-3);padding:8px 0">${esc(t('noLogEntries'))}</div>`;
+    const q = (filter || '').trim().toLowerCase();
+    const list = q ? lines.filter((l) => l.toLowerCase().includes(q)) : lines;
+    if (!list.length) return `<div style="color:var(--ink-3);padding:8px 0">${esc(t('noMatchingLogs'))}</div>`;
+    return list.map((line) => {
+      const m = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+(\[[^\]]+\]\s+)?(.*)$/);
+      let ts = '', tag = '', msg = line;
+      if (m) { ts = m[1]; tag = (m[2] || '').trim(); msg = m[3]; }
+      let cls = '';
+      if (/error|fail|refusing|timed out|unable|invalid|denied/i.test(msg)) cls = 'log-err';
+      else if (/warn|retry|waiting|no ipv[46]|skipping/i.test(msg)) cls = 'log-warn';
+      else if (/\bup\b|ready|endpoint ipv[46] route|auto-tunnel: starting/i.test(msg)) cls = 'log-ok';
+      return `<div class="log-line">${ts ? `<span class="log-ts">${esc(ts)}</span>` : ''}${tag ? `<span class="log-tag">${esc(tag)}</span>` : ''}<span class="${cls}">${esc(msg)}</span></div>`;
+    }).join('');
   }
-};
 
-window.saveStayAwake = async function(enabled) {
-  const toggle = document.getElementById('stayAwakeToggle');
-  const status = document.getElementById('stayAwakeStatus');
-  toggle.disabled = true; status.textContent = t('savingStatus');
-  const r = await run(`${wgksuCmd} stay-awake ${enabled ? 'enable' : 'disable'} ${currentIface}`);
-  toggle.disabled = false;
-  if (r.errno === 0) {
-    toggle.checked = enabled;
-    status.textContent = enabled ? t('enabledStatus') : t('disabledStatus');
-    toast(enabled ? t('stayAwakeEnabled') : t('stayAwakeDisabled'));
-  } else {
-    toggle.checked = !enabled;
-    status.textContent = (!enabled) ? t('enabledStatus') : t('disabledStatus');
-    toast(t('saveFailed') + r.stderr, true);
+  function renderLogs() {
+    const snap = state.snapshot;
+    if (!snap) return;
+
+    const diagSig = `${snap.cur}|${snap.rule4Ok}|${snap.rule6Ok}|${snap.rawRoute4}|${snap.rawRoute6}|${snap.epRoutes}|${snap.rawRule4}|${snap.rawRule6}|${JSON.stringify(snap.net)}|${JSON.stringify(snap.dnsStatus)}|${state.prefs.lang}`;
+    if (diagSig !== state.cache.diag) {
+      state.cache.diag = diagSig;
+      const dnsInfo = dnsSummary(snap);
+      document.getElementById('logPanelDiag').innerHTML = `
+        <div class="sec-head" style="margin-top:0"><span class="sec-title">${esc(t('diagPolicySection'))}</span></div>
+        <div class="sheet">
+          <div class="cell">
+            <span class="cell-label muted">${esc(t('currentNetLabel'))}</span>
+            <span class="cell-val">${esc(formatCurrentNetText(snap.net))}</span>
+          </div>
+          <div class="cell">
+            <span class="cell-label muted">${esc(t('diagV4Rule'))}</span>
+            <span class="tag ${snap.rule4Ok ? 'green' : 'neutral'}">${esc(snap.rule4Ok ? t('diagPresent') : t('diagAbsent'))}</span>
+          </div>
+          <div class="cell">
+            <span class="cell-label muted">${esc(t('diagV6Rule'))}</span>
+            <span class="tag ${snap.rule6Ok ? 'green' : (snap.routes6.length ? 'red' : 'neutral')}">${esc(snap.rule6Ok ? t('diagPresent') : t('diagAbsent'))}</span>
+          </div>
+          <div class="cell">
+            <span class="cell-label muted">${esc(t('diagDnsRedirect'))}</span>
+            <span class="cell-val">
+              ${renderDnsTargetsHtml(dnsInfo)}
+              <span class="tag ${dnsInfo.cls}">${esc(dnsInfo.tag)}</span>
+            </span>
+          </div>
+          <div class="sheet-pad" style="border-top:1px solid var(--sep)">
+            <div class="btn-grid-2">
+              <button class="btn btn-secondary" type="button" data-repair="1" ${snap.cur ? '' : 'disabled'}>${esc(t('btnRepairRoutes'))}</button>
+              <button class="btn btn-primary" type="button" data-copy-diag="1">${esc(t('btnCopyDiag'))}</button>
+            </div>
+          </div>
+        </div>
+        <div class="sec-head"><span class="sec-title">${esc(t('diagRoutesV4'))}</span></div>
+        <div class="sheet"><div class="code-block">${esc(snap.rawRoute4 || t('diagNone'))}</div></div>
+        <div class="sec-head"><span class="sec-title">${esc(t('diagRoutesV6'))}</span></div>
+        <div class="sheet"><div class="code-block">${esc(snap.rawRoute6 || t('diagNone'))}</div></div>
+        <div class="sec-head"><span class="sec-title">${esc(t('diagEndpointRoutes'))}</span></div>
+        <div class="sheet"><div class="code-block">${esc(snap.epRoutes || t('diagNone'))}</div></div>
+        <div class="sec-head"><span class="sec-title">${esc(t('diagRawRules'))}</span></div>
+        <div class="sheet"><div class="code-block">${esc(`# ip -4 rule\n${snap.rawRule4 || '-'}\n\n# ip -6 rule\n${snap.rawRule6 || '-'}`)}</div></div>
+      `;
+    }
+
+    const q = document.getElementById('logFilterInput').value || '';
+    const rtSig = `${q}|${snap.runtimeLog}`;
+    if (rtSig !== state.cache.runtimeLog) {
+      state.cache.runtimeLog = rtSig;
+      const box = document.getElementById('runtimeLogBox');
+      const bottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+      box.innerHTML = formatLogs(snap.runtimeLog, q);
+      if (bottom) box.scrollTop = box.scrollHeight;
+    }
+
+    if (snap.dnsLog !== state.cache.dnsLog) {
+      state.cache.dnsLog = snap.dnsLog;
+      document.getElementById('dnsLogBox').innerHTML = formatLogs(snap.dnsLog, '');
+    }
   }
-};
 
-window.clearLog = async function() {
-  const r = await run(`: > ${WG_DATA}/error.log`);
-  if (r.errno === 0) {
-    document.getElementById('log').textContent = t('noLogEntries');
-    toast(t('runtimeLogCleared'));
-  } else {
-    toast(t('saveFailed') + r.stderr, true);
+  function renderMountState() {
+    const toggle = document.getElementById('commandMountToggle');
+    const meta = document.getElementById('mountMeta');
+    const hint = document.getElementById('commandMountHint');
+    if (!state.mount.loaded) return;
+    if (state.mount.saving) {
+      toggle.disabled = true;
+      meta.textContent = t('savingStatus');
+      return;
+    }
+    if (state.mount.error) {
+      toggle.disabled = true;
+      meta.textContent = t('unavailableStatus');
+      hint.textContent = t('cannotCheckMount');
+      return;
+    }
+    if (!state.mount.available) {
+      toggle.checked = false;
+      toggle.disabled = true;
+      meta.textContent = t('unavailableNoProvider');
+      hint.textContent = t('mountProviderHint');
+      return;
+    }
+    toggle.checked = state.mount.enabled;
+    toggle.disabled = false;
+    meta.textContent = state.mount.enabled ? t('configuredOn') : t('configuredOff');
+    hint.textContent = t('cmdMountHint');
   }
-};
 
-window.genKey = async function() {
-  const r = await run(`privkey=$(${wgCmd} genkey) && echo "$privkey" && echo "$privkey" | ${wgCmd} pubkey`);
-  const lines = r.stdout.trim().split('\n');
-  if (lines.length === 2) {
-    document.getElementById('keyPriv').textContent = lines[0];
-    document.getElementById('keyPub').textContent = lines[1];
-    document.getElementById('keyResult').style.display = 'block';
-    toast(t('keypairGenerated'));
-  } else {
-    toast(t('keypairGenFailed'), true);
+  // --- Actions ---
+  function switchTab(name) {
+    if (state.tab === name) return;
+    state.tab = name;
+    document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === `panel-${name}`));
+    document.querySelectorAll('[data-tab]').forEach((b) => {
+      const act = b.dataset.tab === name;
+      b.classList.toggle('active', act);
+      b.setAttribute('aria-selected', String(act));
+    });
+    if (state.snapshot) renderActiveTab();
+    if ((name === 'auto' || name === 'logs') && Date.now() - lastFullSyncAt > 12000 && !inFlight && !state.busyAction) {
+      refreshSnapshot(false);
+    }
   }
-};
 
-window.createNewConfig = async function(ifaceName) {
-  const name = ifaceName || 'wg0';
-  const r = await run(`privkey=$(${wgCmd} genkey) && echo "$privkey" && echo "$privkey" | ${wgCmd} pubkey`);
-  const lines = r.stdout.trim().split('\n');
-  if (lines.length !== 2) { toast(t('keypairGenFailed'), true); return; }
-  const conf = `[Interface]\nPrivateKey = ${lines[0]}\nAddress = 10.0.0.2/24\n# DNS = 1.1.1.1\n# MTU = 1420\n\n[Peer]\nPublicKey = REPLACE_WITH_SERVER_PUBLIC_KEY\nEndpoint = REPLACE_WITH_SERVER_IP:51820\nAllowedIPs = 10.0.0.0/24\nPersistentKeepalive = 25`;
-  const w = await run(`printf '%b' '${conf.replace(/'/g,"'\\''")}'  > ${WG_DATA}/${name}.conf`);
-  if (w.errno !== 0) { toast(t('createConfigFailed') + w.stderr, true); return; }
-  currentIface = name;
-  await refresh();
-  document.getElementById('keyPriv').textContent = lines[0];
-  document.getElementById('keyPub').textContent = lines[1];
-  document.getElementById('keyResult').style.display = 'block';
-  toggleEdit();
-  toast(t('newConfigToast', { name }));
-};
-
-window.addNewIface = async function() {
-  const ifaces = await getInterfaces();
-  let n = 0;
-  while (ifaces.includes('wg' + n)) n++;
-  const name = prompt(t('interfaceNamePrompt'), 'wg' + n);
-  if (!name) return;
-  if (!/^[a-zA-Z0-9_-]+$/.test(name)) { toast(t('invalidInterfaceName'), true); return; }
-  await createNewConfig(name);
-};
-
-window.deleteConfig = async function() {
-  if (!currentIface) return;
-  if (!confirm(t('deleteConfirm', { name: currentIface }))) return;
-  await run(`${wgksuCmd} stop ${currentIface}`);
-  const r = await run(`rm -f ${WG_DATA}/${currentIface}.conf`);
-  if (r.errno === 0) {
-    toast(t('deletedToast', { name: currentIface }));
-    currentIface = '';
-    await refresh();
-  } else {
-    toast(t('deleteFailed') + r.stderr, true);
+  function switchLogTab(sub) {
+    state.logTab = sub;
+    document.querySelectorAll('#logSubTabs .seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.logtab === sub));
+    document.getElementById('logPanelDiag').style.display = sub === 'diag' ? '' : 'none';
+    document.getElementById('logPanelRuntime').style.display = sub === 'runtime' ? '' : 'none';
+    document.getElementById('logPanelDns').style.display = sub === 'dns' ? '' : 'none';
   }
-};
 
-window.triggerReresolve = async function() {
-  toast(t('runningDns'));
-  await run(`${wgksuCmd} reresolve-dns ${currentIface}`);
-  const log = await run(`tail -20 ${WG_DATA}/reresolve.log 2>/dev/null`);
-  document.getElementById('reresolveLog').textContent = log.stdout.trim() || t('noChangesDetected');
-  toast(t('reresolveComplete'));
-};
-
-window.saveReresolve = async function() {
-  const enabled = document.getElementById('reresolveToggle').checked ? '1' : '0';
-  const interval = document.getElementById('reresolveInterval').value || '120';
-  const r = await run(`cat > ${WG_DATA}/reresolve.${currentIface} << 'WGRR'\nRERESOLVE_ENABLED=${enabled}\nRERESOLVE_INTERVAL=${interval}\nWGRR`);
-  if (r.errno === 0) {
-    document.getElementById('reresolveStatus').textContent = enabled === '1' ? `${t('enabledStatus')} (${t('intervalValue', { value: interval })})` : t('disabledStatus');
-    toast(t('reresolveSettingsSaved'));
-  } else {
-    toast(t('saveFailed') + r.stderr, true);
+  async function writeFileSafe(path, content) {
+    const norm = String(content).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const eof = makeSentinel(norm);
+    const body = norm.length && !norm.endsWith('\n') ? norm + '\n' : norm;
+    return run(`umask 077 && cat > '${path}' <<'${eof}'\n${body}${eof}`);
   }
-};
 
-window.clearReresolveLog = async function() {
-  await run(`: > ${WG_DATA}/reresolve.log`);
-  document.getElementById('reresolveLog').textContent = t('noLogEntries');
-  toast(t('reresolveLogCleared'));
-};
+  // Flush one paint frame so Android WebView renders spinners BEFORE JNI window.ksu.exec() starts
+  function nextPaint() {
+    return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+  }
 
-async function refreshReresolve() {
-  const cfg = await run(`sh -c 'RERESOLVE_ENABLED=1; RERESOLVE_INTERVAL=120; [ -f ${WG_DATA}/reresolve.${currentIface} ] && . ${WG_DATA}/reresolve.${currentIface}; echo "$RERESOLVE_ENABLED $RERESOLVE_INTERVAL"'`);
-  const parts = cfg.stdout.trim().split(' ');
-  const enabled = (parts[0] || '1') !== '0';
-  const interval = parts[1] || '120';
-  document.getElementById('reresolveToggle').checked = enabled;
-  document.getElementById('reresolveInterval').value = interval;
-  document.getElementById('reresolveStatus').textContent = enabled ? `${t('enabledStatus')} (${t('intervalValue', { value: interval })})` : t('disabledStatus');
-  const log = await run(`tail -20 ${WG_DATA}/reresolve.log 2>/dev/null`);
-  document.getElementById('reresolveLog').textContent = log.stdout.trim() || t('noLogEntries');
-}
+  async function withButtonBusy(btn, busyLabel, task) {
+    if (!btn || btn.disabled) return;
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span><span>${esc(busyLabel)}</span>`;
+    await nextPaint();
+    try {
+      return await task();
+    } finally {
+      if (btn.isConnected) {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+    }
+  }
 
-// Запускаем инициализацию локализации, а после неё — всю логику приложения
-initLocalization().then(() => {
-  refresh();
-  refreshReresolve();
-  refreshCommandMount();
-  setInterval(() => { refresh(); refreshReresolve(); refreshCommandMount(); }, 10000);
-});
+  async function controlInterface(action, clickedBtn) {
+    const iface = safeIface(state.currentIface);
+    if (!iface || state.busyAction) return;
+    state.busyAction = action;
+    const busyText = action === 'start' ? t('btnStarting') : (action === 'stop' ? t('btnStopping') : t('btnRestarting'));
+
+    // Immediate in-place DOM update (no full innerHTML teardown) for <16ms visual response
+    document.querySelectorAll('#panel-overview [data-ctrl]').forEach((b) => { b.disabled = true; });
+    if (clickedBtn) {
+      clickedBtn.innerHTML = `<span class="spinner"></span><span>${esc(busyText)}</span>`;
+    }
+    const heroTag = document.getElementById('heroStatusTag');
+    if (heroTag) {
+      heroTag.className = 'tag amber';
+      heroTag.innerHTML = `<span class="status-dot amber"></span><span>${esc(busyText)}</span>`;
+    }
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) refreshBtn.classList.add('spinning');
+
+    await nextPaint();
+
+    try {
+      const r = await run(`'${WGKSU_CMD}' ${action} '${iface}'`, 20000);
+      const errDetail = (r.stderr || r.stdout || String(r.errno)).trim();
+      if (r.stderr === 'TIMEOUT') toast(t('commandTimedOut'), true);
+      else if (r.errno === 2 && errDetail) toast(errDetail, true);
+      else if (r.errno !== 0) toast(t('actionFailed') + errDetail, true);
+      else toast(t(action === 'start' ? 'startedToast' : (action === 'stop' ? 'stoppedToast' : 'restartedToast'), { name: iface }));
+    } finally {
+      state.busyAction = '';
+      state.cache.overview = '';
+      state.cache.overviewStruct = '';
+      await refreshSnapshot(false);
+    }
+  }
+
+  async function saveAutoTunnel(btn) {
+    const iface = safeIface(state.currentIface);
+    if (!iface) return;
+    await withButtonBusy(btn || document.getElementById('saveAutoBtn'), t('savingStatus'), async () => {
+      const d = state.autoDraft;
+      const cfg = [
+        `AUTOTUNNEL_ENABLED=${d.enabled ? '1' : '0'}`,
+        `WIFI_MODE=${d.wifiMode}`,
+        `MOBILE_SIM1=${d.sim1}`,
+        `MOBILE_SIM2=${d.sim2}`
+      ].join('\n');
+
+      const r1 = await writeFileSafe(`${WG_DATA}/autotunnel.${iface}`, cfg);
+      const r2 = await writeFileSafe(`${WG_DATA}/autotunnel.${iface}.ssids`, d.ssids.join('\n'));
+      if (r1.errno !== 0 || r2.errno !== 0) {
+        toast(t('saveFailed') + (r1.stderr || r2.stderr), true);
+        return;
+      }
+
+      d.dirty = false;
+      await run(`'${WGKSU_CMD}' auto-tunnel-resume '${iface}'`, 18000);
+      toast(t('autoSavedToast'));
+      await refreshSnapshot(false);
+    });
+  }
+
+  function addSsidToDraft(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return;
+    if (!state.autoDraft.ssids.includes(s)) {
+      state.autoDraft.ssids.push(s);
+      state.autoDraft.dirty = true;
+      state.cache.auto = '';
+      renderAuto();
+    }
+  }
+
+  function validateConfig(content) {
+    if (!/^[ \t]*\[Interface\][ \t]*$/im.test(content)) return t('missingInterface');
+    if (!/^[ \t]*PrivateKey[ \t]*=/im.test(content)) return t('missingPrivateKey');
+    if (!/^[ \t]*\[Peer\][ \t]*$/im.test(content)) return t('missingPeer');
+    if (/REPLACE_WITH_/.test(content)) return t('replacePlaceholder');
+    return '';
+  }
+
+  function updateValidation() {
+    const wrap = document.getElementById('editorValidationWrap');
+    const el = document.getElementById('editorValidation');
+    const err = validateConfig(document.getElementById('configEditor').value);
+    if (err) { wrap.style.display = ''; el.textContent = err; }
+    else wrap.style.display = 'none';
+    renderConfig();
+  }
+
+  function startEdit() {
+    if (!state.snapshot || !state.snapshot.cur) return;
+    state.editing = true;
+    const ed = document.getElementById('configEditor');
+    ed.value = (state.snapshot.conf || '').replace(/\r\n/g, '\n');
+    document.getElementById('configViewWrap').style.display = 'none';
+    document.getElementById('configEditWrap').style.display = '';
+    updateValidation();
+    ed.focus();
+  }
+
+  function cancelEdit() {
+    state.editing = false;
+    document.getElementById('configViewWrap').style.display = '';
+    document.getElementById('configEditWrap').style.display = 'none';
+    state.cache.config = '';
+    renderConfig();
+  }
+
+  async function saveConfig(andRestart) {
+    const iface = safeIface(state.currentIface);
+    if (!iface) return;
+    const content = document.getElementById('configEditor').value;
+    const err = validateConfig(content);
+    if (err) { toast(err, true); updateValidation(); return; }
+
+    const b1 = document.getElementById('saveConfigBtn'), b2 = document.getElementById('saveRestartBtn');
+    const activeBtn = andRestart ? b2 : b1;
+    const otherBtn = andRestart ? b1 : b2;
+    otherBtn.disabled = true;
+    try {
+      await withButtonBusy(activeBtn, andRestart ? t('btnRestarting') : t('savingStatus'), async () => {
+        const r = await writeFileSafe(`${WG_DATA}/${iface}.conf`, content);
+        if (r.errno !== 0) { toast(t('saveFailed') + (r.stderr || r.errno), true); return; }
+
+        if (andRestart) {
+          const rr = await run(`'${WGKSU_CMD}' restart '${iface}'`, 20000);
+          cancelEdit();
+          const rrDetail = (rr.stderr || rr.stdout || String(rr.errno)).trim();
+          if (rr.errno === 2 && rrDetail) toast(rrDetail, true);
+          else if (rr.errno !== 0) toast(t('actionFailed') + rrDetail, true);
+          else toast(t('configSavedRestarted', { name: iface }));
+          await new Promise((res) => setTimeout(res, 200));
+        } else {
+          cancelEdit();
+          toast(t('configSaved'));
+        }
+        await refreshSnapshot(false);
+      });
+    } finally {
+      otherBtn.disabled = false;
+    }
+  }
+
+  async function generateKeypair() {
+    await withButtonBusy(document.getElementById('genKeyBtn'), t('btnGenerating'), async () => {
+      const r = await run(`priv=$('${WG_CMD}' genkey) && printf '%s\\n' "$priv" && printf '%s\\n' "$priv" | '${WG_CMD}' pubkey`);
+      const lines = r.stdout.trim().split('\n').filter(Boolean);
+      if (r.errno === 0 && lines.length === 2) {
+        state.lastGenKeys = { priv: lines[0], pub: lines[1] };
+        document.getElementById('keyPriv').textContent = lines[0];
+        document.getElementById('keyPub').textContent = lines[1];
+        document.getElementById('keyResult').style.display = '';
+        renderConfig();
+        toast(t('keypairGenerated'));
+      } else {
+        toast(t('keypairGenFailed'), true);
+      }
+    });
+  }
+
+  function insertPrivKey() {
+    if (!state.editing || !state.lastGenKeys) return;
+    const ed = document.getElementById('configEditor');
+    ed.value = /^[ \t]*PrivateKey[ \t]*=.*$/im.test(ed.value)
+      ? ed.value.replace(/^[ \t]*PrivateKey[ \t]*=.*$/im, `PrivateKey = ${state.lastGenKeys.priv}`)
+      : `[Interface]\nPrivateKey = ${state.lastGenKeys.priv}\n${ed.value}`;
+    updateValidation();
+    toast(t('keypairInserted'));
+  }
+
+  function openModal(id) { document.getElementById(id).classList.add('open'); }
+  function closeModals() { document.querySelectorAll('.backdrop.open').forEach((m) => m.classList.remove('open')); }
+
+  function openNewModal() {
+    let n = 0;
+    while (state.ifaces.includes(`wg${n}`)) n++;
+    const inp = document.getElementById('newIfaceName');
+    inp.value = `wg${n}`;
+    openModal('newIfaceModal');
+    setTimeout(() => { inp.focus(); inp.select(); }, 40);
+  }
+
+  async function confirmCreate() {
+    const name = document.getElementById('newIfaceName').value.trim();
+    if (!IFACE_RE.test(name)) { toast(t('invalidInterfaceName'), true); return; }
+    if (state.ifaces.includes(name)) { toast(t('ifaceAlreadyExists', { name }), true); return; }
+    const tpl = (document.querySelector('input[name="newIfaceTpl"]:checked') || {}).value || 'dual';
+    await withButtonBusy(document.getElementById('modalNewCreate'), t('btnCreating'), async () => {
+      const k = await run(`priv=$('${WG_CMD}' genkey) && printf '%s\\n' "$priv" && printf '%s\\n' "$priv" | '${WG_CMD}' pubkey`);
+      const lines = k.stdout.trim().split('\n').filter(Boolean);
+      if (k.errno !== 0 || lines.length !== 2) { toast(t('keypairGenFailed'), true); return; }
+      const conf = tpl === 'dual'
+        ? `[Interface]\nPrivateKey = ${lines[0]}\nAddress = 10.0.0.2/32, fd00::2/128\nDNS = 1.1.1.1, 2606:4700:4700::1111\nMTU = 1420\n\n[Peer]\nPublicKey = REPLACE_WITH_SERVER_PUBLIC_KEY\nEndpoint = REPLACE_WITH_SERVER_IP:51820\nAllowedIPs = 0.0.0.0/0, ::/0\nPersistentKeepalive = 25\n`
+        : `[Interface]\nPrivateKey = ${lines[0]}\nAddress = 10.0.0.2/24\n# DNS = 1.1.1.1\n# MTU = 1420\n\n[Peer]\nPublicKey = REPLACE_WITH_SERVER_PUBLIC_KEY\nEndpoint = REPLACE_WITH_SERVER_IP:51820\nAllowedIPs = 10.0.0.0/24\nPersistentKeepalive = 25\n`;
+      const w = await writeFileSafe(`${WG_DATA}/${name}.conf`, conf);
+      if (w.errno !== 0) { toast(t('createConfigFailed') + w.stderr, true); return; }
+      closeModals();
+      state.currentIface = name;
+      state.lastGenKeys = { priv: lines[0], pub: lines[1] };
+      document.getElementById('keyPriv').textContent = lines[0];
+      document.getElementById('keyPub').textContent = lines[1];
+      document.getElementById('keyResult').style.display = '';
+      await refreshSnapshot(false);
+      switchTab('config');
+      startEdit();
+      toast(t('newConfigToast', { name }));
+    });
+  }
+
+  async function confirmDelete() {
+    const iface = safeIface(state.currentIface);
+    if (!iface) return;
+    await withButtonBusy(document.getElementById('modalDelConfirm'), t('btnDeleting'), async () => {
+      await run(`'${WGKSU_CMD}' stop '${iface}'`, 15000);
+      const r = await run(`rm -f '${WG_DATA}/${iface}.conf' '${WG_DATA}/autostart.${iface}' '${WG_DATA}/stayawake.${iface}' '${WG_DATA}/reresolve.${iface}' '${WG_DATA}/autotunnel.${iface}' '${WG_DATA}/autotunnel.${iface}.ssids' '${WG_DATA}/dns.${iface}' '${WG_DATA}/manual_pause.${iface}'`);
+      closeModals();
+      if (r.errno === 0) {
+        if (state.editing) cancelEdit();
+        toast(t('deletedToast', { name: iface }));
+        state.currentIface = '';
+        resetCache();
+        await refreshSnapshot(false);
+      } else {
+        toast(t('deleteFailed') + r.stderr, true);
+      }
+    });
+  }
+
+  async function saveReresolve(enabled, interval) {
+    const iface = safeIface(state.currentIface);
+    if (!iface) return;
+    const r = await writeFileSafe(`${WG_DATA}/reresolve.${iface}`, `RERESOLVE_ENABLED=${enabled ? '1' : '0'}\nRERESOLVE_INTERVAL=${interval}\n`);
+    if (r.errno === 0) {
+      if (state.snapshot) { state.snapshot.reresolveEnabled = enabled; state.snapshot.reresolveInterval = String(interval); }
+      state.cache.auto = '';
+      renderAuto();
+      toast(t('reresolveSettingsSaved'));
+    } else {
+      toast(t('saveFailed') + r.stderr, true);
+    }
+  }
+
+  function copyDiag() {
+    const s = state.snapshot;
+    if (!s) return;
+    copyText([
+      `Interface: ${s.cur || '-'} (${s.isUp ? 'UP' : 'DOWN'})`,
+      `Network: ${formatCurrentNetText(s.net)}`,
+      `IPv4: ${s.addr4.join(', ') || '-'}`,
+      `IPv6: ${s.addr6.join(', ') || '-'}`,
+      `Tunnel DNS: v4=${s.dnsStatus?.dns4 || '-'}(nat=${s.dnsStatus?.v4Nat}), v6=${s.dnsStatus?.dns6 || '-'}(mode=${s.dnsStatus?.v6Mode}), dotGuard=${s.dnsStatus?.dotGuard}`,
+      `Policy pref 1: IPv4=${s.rule4Ok}, IPv6=${s.rule6Ok}`,
+      `--- IPv4 routes ---\n${s.rawRoute4 || '-'}`,
+      `--- IPv6 routes ---\n${s.rawRoute6 || '-'}`,
+      `--- Endpoint routes ---\n${s.epRoutes || '-'}`,
+      `--- ip -4 rule ---\n${s.rawRule4 || '-'}`,
+      `--- ip -6 rule ---\n${s.rawRule6 || '-'}`
+    ].join('\n'));
+  }
+
+  function restartPolling() {
+    clearInterval(pollTimer);
+    pollTimer = null;
+    if (state.prefs.refreshMs > 0 && !document.hidden) {
+      pollTimer = setInterval(() => {
+        if (document.hidden || state.busyAction || inFlight) return;
+        if (document.querySelector('.backdrop.open')) return;
+        if (Date.now() - lastInteractAt < 1500) return;
+        if (state.tab === 'overview') {
+          if (state.snapshot && state.snapshot.cur) fastPollSnapshot();
+          else refreshSnapshot(false);
+        } else if (state.tab === 'logs' && Date.now() - lastFullSyncAt >= 10000) {
+          refreshSnapshot(false);
+        }
+      }, state.prefs.refreshMs);
+    }
+  }
+
+  // --- Event Binding ---
+  function bindEvents() {
+    const markInteract = () => { lastInteractAt = Date.now(); };
+    document.addEventListener('pointerdown', markInteract, { passive: true });
+    document.addEventListener('touchstart', markInteract, { passive: true });
+    window.addEventListener('scroll', markInteract, { passive: true });
+    document.addEventListener('click', async (e) => {
+      const tab = e.target.closest('[data-tab]');
+      if (tab) { switchTab(tab.dataset.tab); return; }
+
+      const sw = e.target.closest('[data-switch]');
+      if (sw) {
+        const target = sw.dataset.switch;
+        if (target && target !== state.currentIface) {
+          if (state.editing) cancelEdit();
+          state.currentIface = target;
+          state.autoDraft.dirty = false;
+          state.rates = { iface: '', ts: 0, rx: 0, tx: 0, rxRate: 0, txRate: 0, peers: {} };
+          resetCache();
+          renderHeader();
+          refreshSnapshot(true);
+        }
+        return;
+      }
+
+      if (e.target.closest('[data-open-new]')) { openNewModal(); return; }
+
+      const ctrl = e.target.closest('[data-ctrl]');
+      if (ctrl) { controlInterface(ctrl.dataset.ctrl, ctrl); return; }
+
+      const resumeBtn = e.target.closest('[data-resume-auto]');
+      if (resumeBtn) {
+        const iface = safeIface(state.currentIface);
+        if (!iface) return;
+        await withButtonBusy(resumeBtn, t('btnResumingAuto'), async () => {
+          const r = await run(`'${WGKSU_CMD}' auto-tunnel-resume '${iface}'`, 18000);
+          if (r.errno === 0) toast(t('autoResumedToast'));
+          else toast(t('actionFailed') + (r.stderr || r.errno), true);
+          state.cache.overview = '';
+          state.cache.overviewStruct = '';
+          await refreshSnapshot(false);
+        });
+        return;
+      }
+
+      const cp = e.target.closest('[data-copy]');
+      if (cp) { copyText(cp.dataset.copy); return; }
+
+      const wm = e.target.closest('[data-wifi-mode]');
+      if (wm) {
+        state.autoDraft.wifiMode = wm.dataset.wifiMode;
+        state.autoDraft.dirty = true;
+        state.cache.auto = '';
+        renderAuto();
+        return;
+      }
+
+      const simBtn = e.target.closest('[data-sim]');
+      if (simBtn) {
+        if (simBtn.dataset.sim === '1') state.autoDraft.sim1 = simBtn.dataset.act;
+        else state.autoDraft.sim2 = simBtn.dataset.act;
+        state.autoDraft.dirty = true;
+        state.cache.auto = '';
+        renderAuto();
+        return;
+      }
+
+      const delSsid = e.target.closest('[data-del-ssid]');
+      if (delSsid) {
+        state.autoDraft.ssids = state.autoDraft.ssids.filter((s) => s !== delSsid.dataset.delSsid);
+        state.autoDraft.dirty = true;
+        state.cache.auto = '';
+        renderAuto();
+        return;
+      }
+
+      const pickSsid = e.target.closest('[data-pick-ssid]');
+      if (pickSsid) { addSsidToDraft(pickSsid.dataset.pickSsid); return; }
+
+      if (e.target.closest('#addSsidBtn')) {
+        const inp = document.getElementById('ssidInput');
+        if (inp) { addSsidToDraft(inp.value); inp.value = ''; }
+        return;
+      }
+      if (e.target.closest('#loadSavedWifiBtn')) { loadSavedWifi(); return; }
+      if (e.target.closest('#saveAutoBtn')) { saveAutoTunnel(e.target.closest('#saveAutoBtn')); return; }
+
+      const rrSec = e.target.closest('[data-rr-sec]');
+      if (rrSec && state.snapshot) {
+        saveReresolve(state.snapshot.reresolveEnabled, rrSec.dataset.rrSec);
+        return;
+      }
+      const runRrBtn = e.target.closest('#runReresolveBtn');
+      if (runRrBtn) {
+        const iface = safeIface(state.currentIface);
+        if (!iface) return;
+        await withButtonBusy(runRrBtn, t('btnResolving'), async () => {
+          await run(`'${WGKSU_CMD}' reresolve-dns '${iface}'`, 20000);
+          await refreshSnapshot(false);
+          toast(t('reresolveComplete'));
+        });
+        return;
+      }
+
+      const lt = e.target.closest('[data-logtab]');
+      if (lt) { switchLogTab(lt.dataset.logtab); return; }
+
+      const repairBtn = e.target.closest('[data-repair]');
+      if (repairBtn) {
+        const iface = safeIface(state.currentIface);
+        if (!iface) return;
+        await withButtonBusy(repairBtn, t('btnRepairing'), async () => {
+          await run(`'${WGKSU_CMD}' repair-routes '${iface}'`, 15000);
+          toast(t('diagRepaired'));
+          await refreshSnapshot(false);
+        });
+        return;
+      }
+      if (e.target.closest('[data-copy-diag]')) { copyDiag(); return; }
+
+      const ref = e.target.closest('[data-refresh]');
+      if (ref) {
+        state.prefs.refreshMs = parseInt(ref.dataset.refresh, 10) || 0;
+        localStorage.setItem('wgksu_refresh', String(state.prefs.refreshMs));
+        document.querySelectorAll('#refreshSeg .seg-btn').forEach((b) => b.classList.toggle('active', Number(b.dataset.refresh) === state.prefs.refreshMs));
+        restartPolling();
+        return;
+      }
+      const th = e.target.closest('[data-theme-val]');
+      if (th) { applyTheme(th.dataset.themeVal); return; }
+      const lg = e.target.closest('[data-lang-val]');
+      if (lg) { loadLocalization(lg.dataset.langVal); return; }
+
+      const cpBtn = e.target.closest('[data-captive-val]');
+      if (cpBtn && !cpBtn.disabled) {
+        const mode = cpBtn.dataset.captiveVal;
+        const btns = Array.from(document.querySelectorAll('#captivePortalSeg .seg-btn'));
+        btns.forEach((b) => { b.disabled = true; });
+        renderCaptivePortalSeg(mode);
+        await nextPaint();
+        const r = await run(`'${WGKSU_CMD}' captive-portal '${mode}'`, 10000);
+        btns.forEach((b) => { b.disabled = false; });
+        if (r.errno === 0) {
+          toast(mode === 'cn' ? t('captiveSavedCn') : (mode === 'ignore' ? t('captiveSavedIgnore') : t('captiveSavedDefault')));
+        } else {
+          await refreshMountStatus();
+          toast(t('saveFailed') + (r.stderr || r.errno), true);
+        }
+        return;
+      }
+
+      if (e.target.classList.contains('backdrop')) closeModals();
+    });
+
+    document.addEventListener('change', async (e) => {
+      const id = e.target.id;
+      const iface = safeIface(state.currentIface);
+      if (id === 'autoEnableToggle') {
+        state.autoDraft.enabled = e.target.checked;
+        state.autoDraft.dirty = true;
+        state.cache.auto = '';
+        renderAuto();
+      } else if (id === 'autoStartToggle' && iface) {
+        const on = e.target.checked;
+        e.target.disabled = true;
+        const r = await run(`'${WGKSU_CMD}' ${on ? 'enable' : 'disable'} '${iface}'`);
+        e.target.disabled = false;
+        if (r.errno === 0) {
+          if (state.snapshot) state.snapshot.autoStart = on;
+          toast(on ? t('bootAutoStartEnabled') : t('bootAutoStartDisabled'));
+        } else {
+          e.target.checked = !on;
+          toast(t('saveFailed') + r.stderr, true);
+        }
+      } else if (id === 'stayAwakeToggle' && iface) {
+        const on = e.target.checked;
+        e.target.disabled = true;
+        const r = await run(`'${WGKSU_CMD}' stay-awake ${on ? 'enable' : 'disable'} '${iface}'`);
+        e.target.disabled = false;
+        if (r.errno === 0) {
+          if (state.snapshot) state.snapshot.stayAwake = on;
+          toast(on ? t('stayAwakeEnabled') : t('stayAwakeDisabled'));
+        } else {
+          e.target.checked = !on;
+          toast(t('saveFailed') + r.stderr, true);
+        }
+      } else if (id === 'reresolveToggle' && state.snapshot) {
+        saveReresolve(e.target.checked, state.snapshot.reresolveInterval || '120');
+      } else if (id === 'notifToggle') {
+        const on = e.target.checked;
+        e.target.disabled = true;
+        await nextPaint();
+        const r = await run(`'${WGKSU_CMD}' notification ${on ? 'enable' : 'disable'}`, 10000);
+        e.target.disabled = false;
+        if (r.errno === 0) toast(on ? t('notifEnabledToast') : t('notifDisabledToast'));
+        else { e.target.checked = !on; toast(t('saveFailed') + (r.stderr || r.errno), true); }
+      } else if (id === 'commandMountToggle') {
+        const on = e.target.checked;
+        state.mount.saving = true;
+        renderMountState();
+        const r = await run(`'${WGKSU_CMD}' mount ${on ? 'enable' : 'disable'}`);
+        state.mount.saving = false;
+        await refreshMountStatus();
+        if (r.errno === 0) toast(t('mountSaved'));
+        else toast(t('saveFailed') + (r.stderr || r.stdout || r.errno).trim(), true);
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModals();
+      if (e.key === 'Enter' && e.target.id === 'ssidInput') {
+        e.preventDefault();
+        addSsidToDraft(e.target.value);
+        e.target.value = '';
+      }
+      if (e.key === 'Enter' && e.target.id === 'newIfaceName') confirmCreate();
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', () => refreshSnapshot(true));
+    document.getElementById('openSettingsBtn').addEventListener('click', () => {
+      openModal('settingsModal');
+      refreshMountStatus();
+    });
+    document.getElementById('closeSettingsBtn').addEventListener('click', closeModals);
+
+    document.getElementById('toggleSecretBtn').addEventListener('click', () => {
+      state.showSecrets = !state.showSecrets;
+      document.getElementById('toggleSecretBtn').title = state.showSecrets ? t('btnHideSecrets') : t('btnShowSecrets');
+      state.cache.config = '';
+      renderConfig();
+    });
+    document.getElementById('copyConfigBtn').addEventListener('click', () => {
+      if (state.snapshot && state.snapshot.conf) copyText(state.snapshot.conf);
+    });
+    document.getElementById('editConfigBtn').addEventListener('click', startEdit);
+    document.getElementById('deleteConfigBtn').addEventListener('click', () => {
+      if (!state.currentIface) return;
+      document.getElementById('deleteModalDesc').textContent = t('deleteConfirm', { name: state.currentIface });
+      openModal('deleteIfaceModal');
+    });
+    document.getElementById('saveConfigBtn').addEventListener('click', () => saveConfig(false));
+    document.getElementById('saveRestartBtn').addEventListener('click', () => saveConfig(true));
+    document.getElementById('cancelEditBtn').addEventListener('click', cancelEdit);
+    document.getElementById('configEditor').addEventListener('input', updateValidation);
+
+    document.getElementById('genKeyBtn').addEventListener('click', generateKeypair);
+    document.getElementById('insertPrivKeyBtn').addEventListener('click', insertPrivKey);
+    document.getElementById('keyPrivRow').addEventListener('click', () => state.lastGenKeys && copyText(state.lastGenKeys.priv));
+    document.getElementById('keyPubRow').addEventListener('click', () => state.lastGenKeys && copyText(state.lastGenKeys.pub));
+
+    document.getElementById('logFilterInput').addEventListener('input', () => renderLogs());
+    document.getElementById('copyRuntimeLogBtn').addEventListener('click', () => state.snapshot && copyText(state.snapshot.runtimeLog || t('noLogEntries')));
+    document.getElementById('clearRuntimeLogBtn').addEventListener('click', async () => {
+      const r = await run(`: > '${WG_DATA}/error.log'`);
+      if (r.errno === 0) { if (state.snapshot) state.snapshot.runtimeLog = ''; renderLogs(); toast(t('runtimeLogCleared')); }
+      else toast(t('saveFailed') + r.stderr, true);
+    });
+    document.getElementById('copyDnsLogBtn').addEventListener('click', () => state.snapshot && copyText(state.snapshot.dnsLog || t('noLogEntries')));
+    document.getElementById('clearDnsLogBtn').addEventListener('click', async () => {
+      const r = await run(`: > '${WG_DATA}/reresolve.log'`);
+      if (r.errno === 0) { if (state.snapshot) state.snapshot.dnsLog = ''; renderLogs(); toast(t('reresolveLogCleared')); }
+      else toast(t('saveFailed') + r.stderr, true);
+    });
+
+    document.getElementById('modalNewCancel').addEventListener('click', closeModals);
+    document.getElementById('modalNewCreate').addEventListener('click', confirmCreate);
+    document.getElementById('modalDelCancel').addEventListener('click', closeModals);
+    document.getElementById('modalDelConfirm').addEventListener('click', confirmDelete);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { clearInterval(pollTimer); pollTimer = null; }
+      else { refreshSnapshot(false); restartPolling(); }
+    });
+  }
+
+  applyTheme(state.prefs.theme);
+  bindEvents();
+  loadLocalization(state.prefs.lang).then(async () => {
+    await refreshSnapshot(false);
+    restartPolling();
+    refreshMountStatus();
+  });
+})();
 </script>
 </body>
 </html>

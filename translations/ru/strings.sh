@@ -13,6 +13,7 @@ msg_error_config_placeholders_suffix=" содержит незаменённые
 msg_error_interface_create="ОШИБКА: не удалось создать интерфейс WireGuard (возможно, ядро не поддерживает WireGuard)"
 msg_error_endpoint_routes="ОШИБКА: не удалось настроить маршруты эндпоинтов для "
 msg_error_wg_setconf="ОШИБКА: команда wg setconf завершилась с ошибкой для "
+msg_error_autotunnel_blocked="Запуск отклонён: текущая сеть запрещена правилом авто-туннеля"
 msg_iface_already_up=" уже запущен"
 msg_iface_up=" запущен"
 msg_iface_down=" остановлен"
